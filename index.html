@@ -624,7 +624,7 @@ const PROXIES = [
 async function proxiedJSON(url){
   let lastErr;
   for(const p of PROXIES){
-    try{ const r=await fetch(p(url)); if(r.ok) return await r.json(); lastErr=new Error('HTTP '+r.status); }
+    try{ const r=await fetch(p(url),{cache:'no-store'}); if(r.ok) return await r.json(); lastErr=new Error('HTTP '+r.status); }
     catch(e){ lastErr=e; }
   }
   throw lastErr||new Error('All proxies failed');
@@ -643,14 +643,15 @@ function resample(c,n){
 async function fetchCandles(symbol, market, tf, limit=400, pre=false){
   if(market==='crypto'){
     const url=`https://api.binance.com/api/v3/klines?symbol=${symbol.toUpperCase()}&interval=${BINANCE_TF[tf]}&limit=${limit}`;
-    const r=await fetch(url);
+    const r=await fetch(url,{cache:'no-store'});
     if(!r.ok) throw new Error(`Binance ${r.status} for ${symbol}`);
     const d=await r.json();
     return d.map(k=>({t:k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]}));
   } else {
     const m=YF_TF[tf];
     const url=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol.toUpperCase()}`
-             +`?interval=${m.interval}&range=${m.range}`+(pre?'&includePrePost=true':'');
+             +`?interval=${m.interval}&range=${m.range}`+(pre?'&includePrePost=true':'')
+             +`&_=${Date.now()}`;   // cache-bust: force fresh data through the proxy (live updates)
     const j=await proxiedJSON(url);
     const res=j?.chart?.result?.[0];
     if(!res||!res.timestamp) throw new Error(`No stock data for ${symbol}`);
@@ -1252,6 +1253,7 @@ async function loadSignalChart(fit=true){
       : `No buy/sell triggers in this window · try another timeframe`;
     if(state.market==='stock' && !intraday)
       $('sigBanner').innerHTML += ` &nbsp;·&nbsp; <span style="color:var(--muted)">pre/after-market shows on 5m · 15m · 1h</span>`;
+    $('sigBanner').innerHTML += ` &nbsp;·&nbsp; <span style="color:var(--muted)">⟳ ${new Date().toLocaleTimeString()}</span>`;
   }catch(e){
     $('sigBanner').textContent='⚠ '+e.message;
   }
