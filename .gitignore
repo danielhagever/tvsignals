@@ -1,2 +1,13 @@
 .claude/
 .DS_Store
+
+# node / capacitor build artifacts
+node_modules/
+www/
+
+# Xcode / CocoaPods (the ios/ project is committed, these are generated)
+ios/App/App/public/
+ios/App/Pods/
+ios/.xcode.env.local
+ios/App/build/
+build-sim/
