@@ -312,7 +312,7 @@
       <div><i class="ln dash" style="border-color:#cbd5e1"></i> Last price</div>
       <div><i class="ln dash" style="border-color:#8a7dff"></i> Support / Resistance</div>
       <div><b style="color:#16c784">▲</b>&nbsp;Buy &nbsp; <b style="color:#ea3943">▼</b>&nbsp;Sell &nbsp;<span style="color:var(--muted)">— momentum reversal</span></div>
-      <div id="legendSessions" style="display:none"><span style="display:inline-block;width:14px;height:10px;border-radius:2px;background:rgba(96,135,255,.45)"></span>&nbsp;pre-market &nbsp; <span style="display:inline-block;width:14px;height:10px;border-radius:2px;background:rgba(240,150,70,.45)"></span>&nbsp;after-market</div>
+      <div id="legendSessions" style="display:none"><span style="display:inline-block;width:14px;height:10px;border-radius:2px;background:rgba(70,92,150,.85)"></span>&nbsp;pre-market &nbsp; <span style="display:inline-block;width:14px;height:10px;border-radius:2px;background:rgba(150,112,60,.85)"></span>&nbsp;after-market</div>
     </div>
     <div id="sig_chart" class="chartbox"></div>
     <div id="tv_chart" class="chartbox" style="display:none"></div>
@@ -1018,9 +1018,10 @@ function drawSessionsOn(ctx,W,H){
   const getX=time=>{ const c=ts.timeToCoordinate(time); if(c!=null) return c; return time<=t0?0:(time>=t1?W:null); };
   const shade=(a,b,col)=>{ const xa=getX(a), xb=getX(b); if(xa==null||xb==null) return; const x=Math.min(xa,xb), w=Math.abs(xb-xa); if(w<=0) return; ctx.fillStyle=col; ctx.fillRect(x,0,w,H); };
   const vline=(time,col)=>{ const x=ts.timeToCoordinate(time); if(x==null) return; ctx.strokeStyle=col; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(Math.round(x)+.5,0); ctx.lineTo(Math.round(x)+.5,H); ctx.stroke(); };
-  (pre||[]).forEach(p=>shade(p.start,p.end,'rgba(96,135,255,.20)'));
-  (post||[]).forEach(p=>shade(p.start,p.end,'rgba(240,150,70,.20)'));
-  (regular||[]).forEach(p=>{ vline(p.start,'rgba(22,199,132,.6)'); vline(p.end,'rgba(234,57,67,.6)'); });
+  // dim the extended-hours sessions so the regular session stands out (clean, like TradingView)
+  (pre||[]).forEach(p=>shade(p.start,p.end,'rgba(18,28,56,.45)'));    // pre-market: cool dim
+  (post||[]).forEach(p=>shade(p.start,p.end,'rgba(48,36,16,.45)'));   // after-market: warm dim
+  (regular||[]).forEach(p=>{ vline(p.start,'rgba(150,162,190,.22)'); vline(p.end,'rgba(150,162,190,.22)'); });
   if(ls) ls.style.display='flex';
 }
 function drawPatternsOn(ctx,W,H){
