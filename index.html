@@ -187,6 +187,25 @@
   [dir="rtl"] .chart-legend{left:auto;right:12px}
   [dir="rtl"] .fineprint{right:auto;left:12px}
   [dir="rtl"] .gauge-bar i{transition:none}
+  /* symbol search modal (TradingView-style) */
+  .sym-modal{align-items:flex-start}
+  .sym-box{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:680px;width:100%;margin-top:7vh;max-height:82vh;display:flex;flex-direction:column;box-shadow:var(--shadow);overflow:hidden}
+  .sym-head{display:flex;align-items:center;justify-content:space-between;padding:15px 20px;border-bottom:1px solid var(--line)}
+  .sym-head h2{margin:0;font-size:18px;color:#fff}
+  .sym-input-wrap{display:flex;align-items:center;gap:11px;padding:13px 20px;border-bottom:1px solid var(--line)}
+  .sym-mag{font-size:17px;opacity:.7}
+  .sym-input-wrap input{flex:1;background:transparent;border:0;outline:none;color:var(--txt);font-size:18px;font-weight:600}
+  .sym-filters{display:flex;gap:6px;padding:12px 20px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+  .sym-filters button{border:1px solid var(--line);background:var(--panel2);color:var(--muted);padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer}
+  .sym-filters button.on{background:#fff;color:#0b0e14;border-color:#fff}
+  .sym-results{overflow-y:auto;padding:6px 0;min-height:120px}
+  .sym-row{display:flex;align-items:center;gap:12px;padding:11px 20px;cursor:pointer}
+  .sym-row:hover,.sym-row.active{background:var(--panel2)}
+  .sym-row .r-sym{font-weight:700;min-width:96px;color:#fff}
+  .sym-row .r-name{color:var(--muted);font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sym-row .r-tag{font-size:11px;color:var(--muted);border:1px solid var(--line);padding:2px 8px;border-radius:5px;white-space:nowrap}
+  .sym-empty{padding:26px;color:var(--muted);text-align:center;font-size:14px}
+  .sym-foot{padding:10px 20px;border-top:1px solid var(--line);color:var(--muted);font-size:11px}
   /* language picker */
   .langgate{z-index:600}
   .lang-box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px 26px;max-width:380px;width:100%;text-align:center;box-shadow:var(--shadow)}
@@ -389,6 +408,25 @@
 </div>
 <div class="toast" id="toast"></div>
 <div class="fineprint" id="fineprint" title="Read the Terms &amp; Risk Disclaimer" data-i18n="fineprint">⚠ Not financial advice · Terms</div>
+
+<div class="modal-overlay sym-modal" id="searchModal">
+  <div class="sym-box">
+    <div class="sym-head">
+      <h2 data-i18n="search_title">Symbol search</h2>
+      <button class="modal-x" id="searchModalClose" title="Close">✕</button>
+    </div>
+    <div class="sym-input-wrap">
+      <span class="sym-mag">🔍</span>
+      <input id="smInput" autocomplete="off" spellcheck="false" placeholder="Search symbol or name…" data-i18n-ph="search_ph" />
+    </div>
+    <div class="sym-filters" id="smFilters">
+      <button data-m="crypto" class="on" data-i18n="mkt_crypto">Crypto</button>
+      <button data-m="stock" data-i18n="mkt_stock">Stock</button>
+    </div>
+    <div class="sym-results" id="smResults"></div>
+    <div class="sym-foot" data-i18n="search_hint">Start typing to search · Esc to close</div>
+  </div>
+</div>
 
 <div class="modal-overlay" id="faqModal">
   <div class="modal">
@@ -1100,6 +1138,7 @@ function selectSymbol(sym){
   state.symbol=sym.toUpperCase();
   if(!state.watchlist.includes(state.symbol)){state.watchlist.unshift(state.symbol);saveWl();}
   $('ruleSym').textContent=state.symbol;
+  $('symInput').value=state.symbol;
   loadEntryInput();
   renderWatchlist();refreshActiveChart();analyze();
 }
@@ -1295,58 +1334,80 @@ document.querySelector('.chart-tabs').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b||b.dataset.view===state.chartView)return;
   showView(b.dataset.view);
 });
-/* ---- live symbol search + force-uppercase ---- */
-const symInput=$('symInput'), searchBox=$('searchResults');
-let searchTimer=null, searchResultsData=[], activeIdx=-1, searchSeq=0;
-function upperInPlace(){
-  const pos=symInput.selectionStart;
-  const up=symInput.value.toUpperCase();
-  if(up!==symInput.value){symInput.value=up;symInput.setSelectionRange(pos,pos);}
+/* ---- Symbol search modal (TradingView-style) ---- */
+// header symbol box is now a trigger that opens the modal (shows the current symbol)
+const symInput=$('symInput');
+symInput.readOnly=true;
+symInput.addEventListener('mousedown',e=>{ e.preventDefault(); openSearchModal(); });
+$('wlAdd').onclick=()=>openSearchModal();
+
+let smTimer=null, smResults=[], smActive=-1, smSeq=0;
+function openSearchModal(seed=''){
+  const m=$('searchModal'), inp=$('smInput');
+  [...$('smFilters').children].forEach(b=>b.classList.toggle('on',b.dataset.m===state.market));
+  inp.value=(seed||'').toUpperCase();         // always start cleared (or with the typed char)
+  $('smResults').innerHTML=''; smResults=[]; smActive=-1;
+  m.classList.add('open');
+  setTimeout(()=>{ inp.focus(); if(inp.value) smDoSearch(); },20);
 }
-function closeSearch(){searchBox.classList.remove('open');searchBox.innerHTML='';searchResultsData=[];activeIdx=-1;}
-function highlight(){[...searchBox.querySelectorAll('.sr-item')].forEach((el,i)=>el.classList.toggle('active',i===activeIdx));}
-function pickResult(sym){closeSearch();symInput.value=sym.toUpperCase();selectSymbol(sym);}
-function renderSearch(res){
-  if(!res.length){searchBox.innerHTML='<div class="sr-empty">No matches</div>';searchBox.classList.add('open');return;}
-  searchBox.innerHTML=res.map((r,i)=>
-    `<div class="sr-item" data-i="${i}">
-       <span class="sr-sym">${r.symbol}</span>
-       <span class="sr-name">${(r.name||'').replace(/</g,'&lt;')}</span>
-       <span class="sr-tag">${r.exch||''}</span>
-     </div>`).join('');
-  [...searchBox.querySelectorAll('.sr-item')].forEach(el=>{
-    el.onclick=()=>pickResult(res[+el.dataset.i].symbol);
-    el.onmouseenter=()=>{activeIdx=+el.dataset.i;highlight();};
+function closeSearchModal(){ $('searchModal').classList.remove('open'); $('smInput').blur(); }
+function smHighlight(){ [...$('smResults').querySelectorAll('.sym-row')].forEach((el,i)=>el.classList.toggle('active',i===smActive)); }
+function smPick(sym){ closeSearchModal(); selectSymbol(sym); }
+function smRender(res){
+  const wrap=$('smResults');
+  if(!res.length){ wrap.innerHTML='<div class="sym-empty">'+t('search_none')+'</div>'; return; }
+  wrap.innerHTML=res.map((r,i)=>`<div class="sym-row" data-i="${i}"><span class="r-sym">${r.symbol}</span><span class="r-name">${(r.name||'').replace(/</g,'&lt;')}</span><span class="r-tag">${r.exch||''}</span></div>`).join('');
+  [...wrap.querySelectorAll('.sym-row')].forEach(el=>{
+    el.onclick=()=>smPick(res[+el.dataset.i].symbol);
+    el.onmouseenter=()=>{ smActive=+el.dataset.i; smHighlight(); };
   });
-  searchBox.classList.add('open');
 }
-symInput.addEventListener('input',()=>{
-  upperInPlace();
-  const q=symInput.value.trim();
-  clearTimeout(searchTimer);
-  if(!q){closeSearch();return;}
-  const seq=++searchSeq;
-  searchTimer=setTimeout(async()=>{
-    try{
-      const res=await searchSymbols(q);
-      if(seq!==searchSeq) return;            // a newer keystroke superseded this
-      searchResultsData=res; activeIdx=-1; renderSearch(res);
-    }catch(e){ closeSearch(); }
-  },160);
+async function smDoSearch(){
+  const q=$('smInput').value.trim();
+  if(!q){ $('smResults').innerHTML=''; smResults=[]; return; }
+  const seq=++smSeq;
+  try{
+    const res=await searchSymbols(q);
+    if(seq!==smSeq) return;
+    smResults=res; smActive=-1; smRender(res);
+  }catch(e){ $('smResults').innerHTML='<div class="sym-empty">'+t('search_unavail')+'</div>'; }
+}
+function setMarketForSearch(m){
+  if(state.market!==m){
+    state.market=m;
+    [...$('market').children].forEach(c=>c.classList.toggle('on',c.dataset.m===m));
+    state.watchlist=state.wlStore[m];
+    loadEntryInput(); renderWatchlist(); renderPopular();
+  }
+  [...$('smFilters').children].forEach(b=>b.classList.toggle('on',b.dataset.m===m));
+}
+(function setupSearchModal(){
+  const inp=$('smInput');
+  inp.addEventListener('input',()=>{
+    const pos=inp.selectionStart, up=inp.value.toUpperCase();
+    if(up!==inp.value){ inp.value=up; inp.setSelectionRange(pos,pos); }
+    clearTimeout(smTimer); smTimer=setTimeout(smDoSearch,160);
+  });
+  inp.addEventListener('keydown',e=>{
+    const n=smResults.length;
+    if(e.key==='ArrowDown'&&n){ e.preventDefault(); smActive=Math.min(smActive+1,n-1); smHighlight(); }
+    else if(e.key==='ArrowUp'&&n){ e.preventDefault(); smActive=Math.max(smActive-1,0); smHighlight(); }
+    else if(e.key==='Enter'){ e.preventDefault(); if(smActive>=0&&smResults[smActive]) smPick(smResults[smActive].symbol); else if(inp.value.trim()) smPick(inp.value.trim()); }
+    else if(e.key==='Escape'){ closeSearchModal(); }
+  });
+  $('searchModalClose').onclick=closeSearchModal;
+  $('searchModal').addEventListener('click',e=>{ if(e.target===$('searchModal')) closeSearchModal(); });
+  $('smFilters').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; setMarketForSearch(b.dataset.m); smDoSearch(); inp.focus(); });
+})();
+/* start typing anywhere → open the search modal (like TradingView) */
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  const tag=(document.activeElement&&document.activeElement.tagName)||'';
+  if(/INPUT|TEXTAREA|SELECT/.test(tag)) return;
+  if($('searchModal').classList.contains('open')) return;
+  if($('termsGate').classList.contains('show')||$('langGate').classList.contains('show')||$('faqModal').classList.contains('open')) return;
+  if(e.key && e.key.length===1 && /[A-Za-z0-9]/.test(e.key)){ openSearchModal(e.key); e.preventDefault(); }
 });
-symInput.addEventListener('keydown',e=>{
-  const n=searchResultsData.length;
-  if(e.key==='ArrowDown'&&n){e.preventDefault();activeIdx=Math.min(activeIdx+1,n-1);highlight();}
-  else if(e.key==='ArrowUp'&&n){e.preventDefault();activeIdx=Math.max(activeIdx-1,0);highlight();}
-  else if(e.key==='Enter'){
-    e.preventDefault();
-    if(activeIdx>=0&&searchResultsData[activeIdx]) pickResult(searchResultsData[activeIdx].symbol);
-    else if(symInput.value.trim()) pickResult(symInput.value.trim());
-  } else if(e.key==='Escape'){closeSearch();}
-});
-symInput.addEventListener('focus',()=>{ if(searchResultsData.length) searchBox.classList.add('open'); });
-document.addEventListener('click',e=>{ if(!e.target.closest('.search')) closeSearch(); });
-$('wlAdd').onclick=()=>{$('symInput').focus();};
 $('btBtn').onclick=async()=>{
   $('btBtn').disabled=true;$('btBtn').textContent='Running…';
   try{
@@ -1420,6 +1481,7 @@ const I18N={
     card_backtest:'Backtest', bt_btn:'Run backtest on this TF',
     card_alerts:'Alerts', alert_enable:'🔔 Enable alerts', alert_disable:'🔕 Disable alerts',
     card_settings:'⚙ Analysis settings', fineprint:'⚠ Not financial advice · Terms',
+    search_title:'Symbol search', search_none:'No matches', search_unavail:'Search unavailable', search_hint:'Start typing to search · Esc to close',
   },
   he:{
     terms_title:'תנאי שימוש וכתב סיכון',
@@ -1440,6 +1502,7 @@ const I18N={
     card_backtest:'בדיקה לאחור', bt_btn:'הרץ בדיקה לאחור',
     card_alerts:'התראות', alert_enable:'🔔 הפעל התראות', alert_disable:'🔕 כבה התראות',
     card_settings:'⚙ הגדרות ניתוח', fineprint:'⚠ אינו ייעוץ פיננסי · תנאים',
+    search_title:'חיפוש סימול', search_none:'אין תוצאות', search_unavail:'החיפוש אינו זמין', search_hint:'התחל/י להקליד כדי לחפש · Esc לסגירה',
   },
 };
 const TERMS_HTML={
