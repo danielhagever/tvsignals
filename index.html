@@ -1215,7 +1215,7 @@ function detectPatterns(candles){
       }
     }
   }
-  return found.slice(0,2);
+  return found.filter(f=>f.conf>=72).sort((a,b)=>b.conf-a.conf).slice(0,2);   // only high-confidence patterns
 }
 async function loadSignalChart(fit=true){
   const el=$('sig_chart');
@@ -1276,6 +1276,7 @@ function showView(v){
   $('tv_chart').style.display=v==='tv'?'block':'none';
   $('chartLegend').style.display=v==='sig'?'block':'none';
   refreshActiveChart();
+  if(typeof startCryptoWS==='function') startCryptoWS();   // WS only runs on the Signals view
 }
 function refreshActiveChart(){
   if(state.chartView==='sig') loadSignalChart();
@@ -1676,6 +1677,27 @@ function refreshLive(){
 function startLive(){
   clearInterval(liveTimer);
   if(state.live) liveTimer=setInterval(refreshLive, refreshIntervalMs());
+  startCryptoWS();
+}
+// real-time crypto: Binance kline WebSocket updates the live candle tick-by-tick (stocks still poll)
+let cryptoWS=null;
+function stopCryptoWS(){ if(cryptoWS){ try{cryptoWS.close();}catch(e){} cryptoWS=null; } }
+function startCryptoWS(){
+  stopCryptoWS();
+  if(!state.live || state.market!=='crypto' || state.chartView!=='sig') return;
+  try{
+    const ws=new WebSocket(`wss://stream.binance.com:9443/ws/${state.symbol.toLowerCase()}@kline_${state.tf}`);
+    cryptoWS=ws;
+    ws.onmessage=ev=>{
+      if(ws!==cryptoWS || !sigSeries) return;
+      try{
+        const k=JSON.parse(ev.data).k; if(!k) return;
+        sigSeries.update({time:Math.floor(k.t/1000),open:+k.o,high:+k.h,low:+k.l,close:+k.c});
+        scheduleOverlays();
+      }catch(e){}
+    };
+    ws.onerror=()=>{};
+  }catch(e){}
 }
 function updateLiveBtn(){
   const b=$('liveBtn'); if(!b) return;
