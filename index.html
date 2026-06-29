@@ -308,6 +308,7 @@
       <div><i class="ln dash" style="border-color:#cbd5e1"></i> Last price</div>
       <div><i class="ln dash" style="border-color:#8a7dff"></i> Support / Resistance</div>
       <div><b style="color:#16c784">▲</b>&nbsp;Buy &nbsp; <b style="color:#ea3943">▼</b>&nbsp;Sell &nbsp;<span style="color:var(--muted)">— momentum reversal</span></div>
+      <div id="legendSessions" style="display:none"><span style="display:inline-block;width:14px;height:10px;border-radius:2px;background:rgba(96,135,255,.45)"></span>&nbsp;pre-market &nbsp; <span style="display:inline-block;width:14px;height:10px;border-radius:2px;background:rgba(240,150,70,.45)"></span>&nbsp;after-market</div>
     </div>
     <div id="sig_chart" class="chartbox"></div>
     <div id="tv_chart" class="chartbox" style="display:none"></div>
@@ -610,7 +611,7 @@ function resample(c,n){
   return out;
 }
 
-async function fetchCandles(symbol, market, tf, limit=400){
+async function fetchCandles(symbol, market, tf, limit=400, pre=false){
   if(market==='crypto'){
     const url=`https://api.binance.com/api/v3/klines?symbol=${symbol.toUpperCase()}&interval=${BINANCE_TF[tf]}&limit=${limit}`;
     const r=await fetch(url);
@@ -620,7 +621,7 @@ async function fetchCandles(symbol, market, tf, limit=400){
   } else {
     const m=YF_TF[tf];
     const url=`https://query1.finance.yahoo.com/v8/finance/chart/${symbol.toUpperCase()}`
-             +`?interval=${m.interval}&range=${m.range}`;
+             +`?interval=${m.interval}&range=${m.range}`+(pre?'&includePrePost=true':'');
     const j=await proxiedJSON(url);
     const res=j?.chart?.result?.[0];
     if(!res||!res.timestamp) throw new Error(`No stock data for ${symbol}`);
@@ -630,7 +631,13 @@ async function fetchCandles(symbol, market, tf, limit=400){
     })).filter(c=>c.c!=null&&c.o!=null);
     if(m.resample) candles=resample(candles,m.resample);
     if(candles.length<5) throw new Error(`No stock data for ${symbol}`);
-    return candles.slice(-limit);
+    candles=candles.slice(-limit);
+    if(pre){
+      const tp=(res.meta&&res.meta.tradingPeriods)||{};
+      const flat=k=>(tp[k]||[]).map(d=>Array.isArray(d)?d[0]:d).filter(Boolean).map(p=>({start:p.start,end:p.end}));
+      candles.sessions={pre:flat('pre'),regular:flat('regular'),post:flat('post')};
+    }
+    return candles;
   }
 }
 
@@ -978,11 +985,44 @@ function buildSignalMarkers(candles,P){
   }
   return markers;
 }
+/* ---- pre / after-market session overlay (canvas synced to the time scale) ---- */
+let sessionCanvas=null, _sessionData=null;
+function ensureSessionCanvas(){
+  if(sessionCanvas) return;
+  const host=$('sig_chart'); if(!host) return;
+  host.style.position='relative';
+  sessionCanvas=document.createElement('canvas');
+  sessionCanvas.style.cssText='position:absolute;inset:0;pointer-events:none;z-index:3';
+  host.appendChild(sessionCanvas);
+  try{ new ResizeObserver(()=>drawSessions()).observe(host); }catch(e){}
+}
+function drawSessions(){
+  if(!sessionCanvas||!sigChart) return;
+  const host=$('sig_chart'), W=host.clientWidth, H=host.clientHeight, dpr=window.devicePixelRatio||1;
+  sessionCanvas.width=W*dpr; sessionCanvas.height=H*dpr;
+  sessionCanvas.style.width=W+'px'; sessionCanvas.style.height=H+'px';
+  const ctx=sessionCanvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+  const ls=$('legendSessions');
+  if(!_sessionData){ if(ls) ls.style.display='none'; return; }
+  const {candles,pre,regular,post}=_sessionData;
+  if(!candles||!candles.length){ if(ls) ls.style.display='none'; return; }
+  const ts=sigChart.timeScale();
+  const t0=candles[0].t/1000, t1=candles[candles.length-1].t/1000;
+  const getX=time=>{ const c=ts.timeToCoordinate(time); if(c!=null) return c; return time<=t0?0:(time>=t1?W:null); };
+  const shade=(a,b,col)=>{ const xa=getX(a), xb=getX(b); if(xa==null||xb==null) return; const x=Math.min(xa,xb), w=Math.abs(xb-xa); if(w<=0) return; ctx.fillStyle=col; ctx.fillRect(x,0,w,H); };
+  const vline=(time,col)=>{ const x=ts.timeToCoordinate(time); if(x==null) return; ctx.strokeStyle=col; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(Math.round(x)+.5,0); ctx.lineTo(Math.round(x)+.5,H); ctx.stroke(); };
+  (pre||[]).forEach(p=>shade(p.start,p.end,'rgba(96,135,255,.14)'));
+  (post||[]).forEach(p=>shade(p.start,p.end,'rgba(240,150,70,.14)'));
+  (regular||[]).forEach(p=>{ vline(p.start,'rgba(22,199,132,.45)'); vline(p.end,'rgba(234,57,67,.45)'); });
+  if(ls) ls.style.display='flex';
+}
 async function loadSignalChart(){
   const el=$('sig_chart');
   if(typeof LightweightCharts==='undefined'){$('sigBanner').textContent='Chart library failed to load';return;}
   try{
-    const candles=await fetchCandles(state.symbol,state.market,state.tf,300);
+    const intraday=['5m','15m','1h'].includes(state.tf);
+    const usePre = state.market==='stock' && intraday;   // extended hours only for stock intraday
+    const candles=await fetchCandles(state.symbol,state.market,state.tf,300, usePre);
     const P=precompute(candles,state.cfg);
     if(!sigChart){
       sigChart=LightweightCharts.createChart(el,{
@@ -993,6 +1033,7 @@ async function loadSignalChart(){
         timeScale:{borderColor:'#222a3a',timeVisible:true,secondsVisible:false},
         crosshair:{mode:LightweightCharts.CrosshairMode.Normal},
       });
+      sigChart.timeScale().subscribeVisibleLogicalRangeChange(()=>drawSessions());
       sigSeries=sigChart.addCandlestickSeries({upColor:'#16c784',downColor:'#ea3943',
         borderVisible:false,wickUpColor:'#16c784',wickDownColor:'#ea3943',
         priceLineColor:'#cbd5e1',priceLineStyle:LightweightCharts.LineStyle.Dashed});
@@ -1009,6 +1050,11 @@ async function loadSignalChart(){
     sigSR=pivotLevels(candles).slice(0,3).map(lv=>sigSeries.createPriceLine(
       {price:lv.price,color:'#8a7dff',lineStyle:2,lineWidth:1,axisLabelVisible:true,title:'S/R'}));
     sigChart.timeScale().fitContent();
+    // pre / after-market shading + session lines (stock intraday only)
+    ensureSessionCanvas();
+    _sessionData = (usePre && candles.sessions && candles.sessions.regular.length)
+      ? {candles, ...candles.sessions} : null;
+    drawSessions();
     const last=markers[markers.length-1];
     $('sigBanner').innerHTML=last
       ? `Latest trigger: <b style="color:${last.text==='BUY'?'var(--buy)':'var(--sell)'}">${last.text}</b> · ${markers.length} signals on ${state.tf}`
