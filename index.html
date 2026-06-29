@@ -113,11 +113,6 @@
   .chart-legend div{display:flex;align-items:center;gap:7px;white-space:nowrap}
   .chart-legend .ln{display:inline-block;width:16px;height:0;border-top:3px solid #fff;border-radius:2px;flex:0 0 16px}
   .chart-legend .ln.dash{border-top-style:dashed}
-  /* news & earnings */
-  .earnings{font-size:12.5px;padding:9px 11px;border-radius:8px;background:var(--panel);border:1px solid var(--line);margin-bottom:10px;line-height:1.5}
-  .earnings.soon{border-color:var(--hold);color:var(--hold)}
-  .key-input{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:12px;margin-top:4px}
-  .key-input:focus{outline:none;border-color:var(--accent)}
   /* position planner */
   .pos-entry{display:flex;align-items:center;gap:10px;margin-bottom:4px}
   .pos-entry label{color:var(--muted);font-size:13px;white-space:nowrap}
@@ -168,6 +163,24 @@
   .faq-a ul{margin:6px 0;padding-left:18px}
   .faq-a li{margin:3px 0}
   .faq-disclaimer{margin-top:22px;padding:12px 14px;border-radius:9px;background:rgba(240,185,11,.08);border:1px solid rgba(240,185,11,.3);color:var(--hold);font-size:12.5px;line-height:1.55}
+  /* terms gate */
+  .gate{position:fixed;inset:0;background:rgba(5,7,11,.94);backdrop-filter:blur(5px);z-index:500;display:none;align-items:center;justify-content:center;padding:16px}
+  .gate.show{display:flex}
+  .gate-box{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:620px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+  .gate-head{padding:18px 22px 14px;border-bottom:1px solid var(--line)}
+  .gate-head h2{margin:0;font-size:19px;color:#fff}
+  .gate-head p{margin:6px 0 0;font-size:12px;color:var(--muted)}
+  .gate-body{padding:14px 22px;overflow-y:auto;flex:1 1 auto;min-height:0;font-size:12.5px;line-height:1.6;color:var(--txt)}
+  .gate-body h4{color:#fff;margin:16px 0 4px;font-size:13px}
+  .gate-body p{margin:7px 0}
+  .gate-body b{color:#fff}
+  .gate-warn{color:var(--hold);font-weight:600;background:rgba(240,185,11,.08);border:1px solid rgba(240,185,11,.3);border-radius:8px;padding:10px 12px}
+  .gate-foot{padding:14px 22px 18px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:11px}
+  .gate-check{display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--txt);cursor:pointer}
+  .gate-check input{width:17px;height:17px;margin-top:1px;flex:0 0 17px}
+  .gate-check input:disabled{opacity:.4}
+  .gate-agree{padding:13px;border:0;border-radius:9px;background:var(--accent);color:#fff;font-weight:700;font-size:14px;cursor:pointer}
+  .gate-agree:disabled{background:var(--panel2);color:var(--muted);cursor:not-allowed;border:1px solid var(--line)}
   .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);box-shadow:var(--shadow);padding:12px 18px;border-radius:10px;z-index:99;display:none;max-width:80vw}
   .err{color:var(--sell);font-size:12px;padding:6px 2px}
   details summary{cursor:pointer;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:8px}
@@ -263,10 +276,6 @@
       </div>
     </div>
 
-    <div class="card">
-      <h3>Earnings · <span id="earnSym">—</span></h3>
-      <div id="earningsBox" class="earnings">—</div>
-    </div>
 
     <div class="card">
       <h3>Multi-timeframe confluence</h3>
@@ -331,10 +340,6 @@
           <label>Fast EMA <span class="val" id="vEmaF">50</span><input type="range" id="emaF" min="10" max="100" value="50"></label>
           <label>Slow EMA <span class="val" id="vEmaS">200</span><input type="range" id="emaS" min="100" max="300" value="200"></label>
           <label>Signal threshold <span class="val" id="vThr">40</span><input type="range" id="thr" min="20" max="70" value="40"></label>
-          <label style="margin-top:14px">Finnhub API key <span style="color:var(--muted)">— unlocks earnings dates</span>
-            <input type="text" id="finnhubKey" class="key-input" placeholder="paste your free finnhub.io key" autocomplete="off" spellcheck="false">
-          </label>
-          <div class="hint" style="padding:4px 0 0">Free at finnhub.io. Stored only in your browser. News works without it.</div>
         </div>
       </details>
     </div>
@@ -394,6 +399,50 @@
   </div>
 </div>
 
+<div class="gate" id="termsGate">
+  <div class="gate-box">
+    <div class="gate-head">
+      <h2>Terms of Use & Risk Disclaimer</h2>
+      <p>Please read in full. You must scroll to the bottom and tick the box to continue.</p>
+    </div>
+    <div class="gate-body" id="termsBody">
+      <p class="gate-warn">⚠ TVSignals is an educational tool — it is NOT financial advice and NOT a recommendation to buy or sell anything. Trading and investing can cause you to lose money, including all of it.</p>
+
+      <h4>1. No financial or investment advice</h4>
+      <p>TVSignals (the "App") is provided for <b>general informational and educational purposes only</b>. Nothing in the App constitutes financial, investment, trading, tax, accounting, or legal advice, and nothing should be relied upon as such. The App and its operators are <b>not</b> registered or licensed as a broker-dealer, investment adviser, financial planner, or in any similar capacity in any jurisdiction, and do not act as your fiduciary.</p>
+
+      <h4>2. No recommendation or solicitation</h4>
+      <p>All signals, scores, "buy"/"sell" labels, price targets, scanner rankings, and other outputs are generated <b>automatically by mechanical rules</b> applied to market data. They are <b>not</b> a recommendation, offer, solicitation, or endorsement to buy, sell, or hold any security, cryptocurrency, or other asset, and are <b>not personalized</b> to your circumstances, objectives, financial situation, or risk tolerance.</p>
+
+      <h4>3. Substantial risk of loss</h4>
+      <p>Trading and investing in stocks, crypto-assets, and other instruments involves <b>substantial risk, including the possible loss of your entire investment</b>. Prices are volatile and unpredictable. Technical indicators lag the market, produce false signals, and frequently fail in changing conditions. <b>Past performance and backtested or hypothetical results do not guarantee future results.</b> Only use capital you can afford to lose entirely.</p>
+
+      <h4>4. Data may be inaccurate or delayed</h4>
+      <p>Market data, charts, and other information are supplied by third parties (including, without limitation, Binance, Yahoo Finance, and TradingView) and are provided <b>"as is" and "as available."</b> They may be delayed, inaccurate, incomplete, or interrupted, and must be independently verified. The operators make no guarantee of accuracy, completeness, timeliness, or availability.</p>
+
+      <h4>5. Your sole responsibility</h4>
+      <p>You are <b>solely responsible</b> for your own financial decisions and any trades you place. You should consult a <b>licensed financial professional</b> before making any investment decision. You are responsible for determining and complying with all laws, regulations, and tax obligations that apply to you in your jurisdiction.</p>
+
+      <h4>6. No warranty</h4>
+      <p>The App is provided without warranties of any kind, whether express or implied, including but not limited to implied warranties of merchantability, fitness for a particular purpose, accuracy, title, and non-infringement.</p>
+
+      <h4>7. Limitation of liability</h4>
+      <p>To the maximum extent permitted by applicable law, the operators, owners, and contributors of the App shall <b>not be liable for any direct, indirect, incidental, consequential, special, punitive, or exemplary damages</b> — including, without limitation, any trading or investment losses, loss of profits, or loss of data — arising from or related to your access to or use of (or inability to use) the App, even if advised of the possibility of such damages.</p>
+
+      <h4>8. Indemnification</h4>
+      <p>You agree to indemnify, defend, and hold harmless the operators, owners, and contributors of the App from and against any claims, demands, losses, liabilities, damages, costs, and expenses (including reasonable legal fees) arising out of your use of the App or your breach of these Terms.</p>
+
+      <h4>9. Acceptance of these terms</h4>
+      <p>By ticking the box and selecting "I Agree &amp; Continue," you confirm that you are of legal age in your jurisdiction, that you have read, understood, and agree to these Terms of Use &amp; Risk Disclaimer, and that you use the App <b>entirely at your own risk</b>. If you do not agree, do not use the App.</p>
+      <p style="color:var(--muted);font-size:11px;margin-top:14px">— End of terms —</p>
+    </div>
+    <div class="gate-foot">
+      <label class="gate-check"><input type="checkbox" id="termsCheck" disabled> I have read, understood, and agree to the Terms of Use &amp; Risk Disclaimer above.</label>
+      <button class="gate-agree" id="termsAgree" disabled>Scroll down to read all terms</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://s3.tradingview.com/tv.js"></script>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <script>
@@ -430,7 +479,6 @@ const state = {
   alerts: false,
   alertRules: JSON.parse(localStorage.getItem('tvs_rules')||'[]'),
   entries: JSON.parse(localStorage.getItem('tvs_entries')||'{}'),
-  finnhub: localStorage.getItem('tvs_finnhub')||'',
   lastSignal: {},
   lastSig: null,
 };
@@ -1010,7 +1058,7 @@ function selectSymbol(sym){
   if(!state.watchlist.includes(state.symbol)){state.watchlist.unshift(state.symbol);saveWl();}
   $('ruleSym').textContent=state.symbol;
   loadEntryInput();
-  renderWatchlist();refreshActiveChart();analyze();loadEarnings();
+  renderWatchlist();refreshActiveChart();analyze();
 }
 
 /* ============================================================
@@ -1152,42 +1200,6 @@ function renderPosition(){
   state.entries[state.symbol]=entry; saveEntries();
 }
 
-/* ---- earnings ---- */
-async function fetchEarnings(symbol){
-  if(!state.finnhub) return {needKey:true};
-  const f=d=>d.toISOString().slice(0,10);
-  const from=f(new Date(Date.now()-2*864e5)), to=f(new Date(Date.now()+220*864e5));
-  const r=await fetch(`https://finnhub.io/api/v1/calendar/earnings?from=${from}&to=${to}&symbol=${symbol}&token=${state.finnhub}`);
-  if(r.status===401||r.status===403) throw new Error('invalid API key');
-  if(!r.ok) throw new Error('Finnhub '+r.status);
-  const j=await r.json();
-  const up=(j.earningsCalendar||[]).filter(e=>e.date>=f(new Date(Date.now()-864e5)))
-    .sort((a,b)=>a.date.localeCompare(b.date));
-  return {next:up[0]||null};
-}
-let earnSeq=0;
-async function loadEarnings(){
-  const sym=state.symbol, market=state.market, seq=++earnSeq;
-  $('earnSym').textContent=sym;
-  const eb=$('earningsBox');
-  state.earningsSoon=false;
-  if(market!=='stock'){ eb.className='earnings'; eb.textContent='📅 Earnings — not applicable to crypto.'; return; }
-  eb.className='earnings'; eb.textContent='📅 Checking earnings…';
-  try{
-    const e=await fetchEarnings(sym);
-    if(seq!==earnSeq)return;
-    if(e.needKey){ eb.className='earnings'; eb.innerHTML='📅 Add a free <b>Finnhub</b> key in ⚙ Settings to show earnings dates.'; }
-    else if(e.next){
-      const days=Math.round((new Date(e.next.date+'T00:00:00')-Date.now())/864e5);
-      const soon=days>=0&&days<=7; state.earningsSoon=soon;
-      eb.className='earnings'+(soon?' soon':'');
-      eb.innerHTML=`📅 Next earnings: <b>${e.next.date}</b> ${days<0?'(reported)':'(in '+days+' day'+(days===1?'':'s')+')'}`
-        +(e.next.epsEstimate!=null?` · EPS est ${e.next.epsEstimate}`:'')
-        +(soon?'<br>⚠ Earnings within a week — expect volatility; signals are less reliable.':'');
-    } else { eb.className='earnings'; eb.textContent='📅 No upcoming earnings date found.'; }
-  }catch(err){ if(seq!==earnSeq)return; eb.className='earnings'; eb.textContent='📅 Earnings unavailable ('+err.message+').'; }
-}
-
 /* scanner */
 async function runScan(){
   const tf=state.tf,mkt=state.market,syms=state.watchlist.slice(0,16);
@@ -1226,7 +1238,7 @@ $('market').addEventListener('click',e=>{
   state.symbol=state.watchlist[0]||(state.market==='crypto'?'BTCUSDT':'AAPL');
   $('symInput').value=state.symbol;$('ruleSym').textContent=state.symbol;
   loadEntryInput();
-  renderWatchlist();renderPopular();refreshActiveChart();analyze();loadEarnings();
+  renderWatchlist();renderPopular();refreshActiveChart();analyze();
 });
 $('tfs').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
@@ -1338,22 +1350,42 @@ const bind=(id,key,label)=>{const el=$(id);el.oninput=()=>{
   el.onchange=()=>analyze();};
 bind('rsiLen','rsiLen','vRsi');bind('emaF','emaF','vEmaF');
 bind('emaS','emaS','vEmaS');bind('thr','thr','vThr');
-$('finnhubKey').value=state.finnhub;
-$('finnhubKey').addEventListener('change',()=>{
-  state.finnhub=$('finnhubKey').value.trim();
-  localStorage.setItem('tvs_finnhub',state.finnhub);
-  loadEarnings();
-});
 
 /* ============================================================
    BOOT
 ============================================================ */
+/* ---- first-visit Terms gate (scroll-to-read → tick → agree) ---- */
+(function termsGate(){
+  if(localStorage.getItem('tvs_terms_v1')) return;   // already accepted on this device
+  const gate=$('termsGate'), body=$('termsBody'), chk=$('termsCheck'), btn=$('termsAgree');
+  gate.classList.add('show');
+  let scrolled=false;
+  const checkScroll=()=>{
+    if(!scrolled && body.scrollTop+body.clientHeight>=body.scrollHeight-12){
+      scrolled=true; chk.disabled=false;
+      if(!chk.checked) btn.textContent='Tick the box to agree';
+    }
+  };
+  body.addEventListener('scroll',checkScroll);
+  setTimeout(checkScroll,400);          // handle screens tall enough to show all terms at once
+  chk.addEventListener('change',()=>{
+    const ok=scrolled && chk.checked;
+    btn.disabled=!ok;
+    btn.textContent=ok?'I Agree & Continue':'Tick the box to agree';
+  });
+  btn.addEventListener('click',()=>{
+    if(btn.disabled) return;
+    localStorage.setItem('tvs_terms_v1','1');
+    gate.classList.remove('show');
+  });
+})();
+
 $('symInput').value=state.symbol;
 $('ruleSym').textContent=state.symbol;
 loadEntryInput();
 renderWatchlist();renderPopular();renderRules();
-window.addEventListener('DOMContentLoaded',()=>{refreshActiveChart();analyze();loadEarnings();});
-if(document.readyState!=='loading'){refreshActiveChart();analyze();loadEarnings();}
+window.addEventListener('DOMContentLoaded',()=>{refreshActiveChart();analyze();});
+if(document.readyState!=='loading'){refreshActiveChart();analyze();}
 </script>
 </body>
 </html>
