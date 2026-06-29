@@ -278,10 +278,6 @@
 <div class="app">
   <header>
     <div class="logo">TV<span>Signals</span></div>
-    <div class="seg" id="market">
-      <button data-m="crypto" class="on" data-i18n="mkt_crypto">Crypto</button>
-      <button data-m="stock" data-i18n="mkt_stock">Stock</button>
-    </div>
     <div class="search">
       <input id="symInput" placeholder="Search symbol or name — e.g. BTC, AAPL, apple…" data-i18n-ph="search_ph" autocomplete="off" spellcheck="false" />
       <div id="searchResults" class="search-results"></div>
@@ -449,10 +445,6 @@
       <span class="sym-mag">🔍</span>
       <input id="smInput" autocomplete="off" spellcheck="false" placeholder="Search symbol or name…" data-i18n-ph="search_ph" />
     </div>
-    <div class="sym-filters" id="smFilters">
-      <button data-m="crypto" class="on" data-i18n="mkt_crypto">Crypto</button>
-      <button data-m="stock" data-i18n="mkt_stock">Stock</button>
-    </div>
     <div class="sym-results" id="smResults"></div>
     <div class="sym-foot" data-i18n="search_hint">Start typing to search · Esc to close</div>
   </div>
@@ -545,47 +537,48 @@
 /* ============================================================
    STATE
 ============================================================ */
+// one merged universe — crypto and stocks together (each symbol's type is auto-detected)
 const POPULAR = {
-  crypto:{
-    'Majors':['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT'],
-    'AI & compute':['FETUSDT','RENDERUSDT','TAOUSDT','GRTUSDT','NEARUSDT'],
-    'Layer 1s':['SOLUSDT','AVAXUSDT','ADAUSDT','DOTUSDT','APTUSDT','SUIUSDT'],
-    'DeFi':['UNIUSDT','AAVEUSDT','LINKUSDT','MKRUSDT'],
-    'Memes':['DOGEUSDT','PEPEUSDT','SHIBUSDT','WIFUSDT'],
-  },
-  stock:{
-    'Mega-cap tech':['AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA'],
-    'Artificial intelligence':['NVDA','MSFT','GOOGL','META','AMD','PLTR','SMCI','AVGO','ARM'],
-    'Semiconductors':['NVDA','AMD','AVGO','TSM','INTC','MU','ARM','QCOM','ASML','TXN','LRCX','AMAT'],
-    'Quantum computing':['IONQ','RGTI','QBTS','QUBT','ARQQ','IBM'],
-    'Nuclear & uranium':['CCJ','SMR','OKLO','LEU','NNE','BWXT','CEG','VST','UUUU'],
-    'EV & autos':['TSLA','RIVN','LCID','NIO','F','GM'],
-    'Crypto & fintech':['COIN','MSTR','HOOD','MARA','RIOT','PYPL','SQ'],
-    'Finance':['JPM','BAC','GS','V','MA','BRK-B'],
-    'ETFs':['SPY','QQQ','DIA','IWM','VTI','SMH','ARKK'],
-    'Energy':['XOM','CVX','COP','SLB'],
-    'Consumer':['NFLX','DIS','KO','NKE','SBUX','MCD'],
-  },
+  'Crypto · Majors':['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT'],
+  'Crypto · Layer 1s':['SOLUSDT','AVAXUSDT','ADAUSDT','DOTUSDT','APTUSDT','SUIUSDT'],
+  'Crypto · DeFi':['UNIUSDT','AAVEUSDT','LINKUSDT','MKRUSDT'],
+  'Crypto · AI':['FETUSDT','RENDERUSDT','TAOUSDT','GRTUSDT','NEARUSDT'],
+  'Crypto · Memes':['DOGEUSDT','PEPEUSDT','SHIBUSDT','WIFUSDT'],
+  'Mega-cap tech':['AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA'],
+  'AI stocks':['NVDA','MSFT','GOOGL','META','AMD','PLTR','SMCI','AVGO','ARM'],
+  'Semiconductors':['NVDA','AMD','AVGO','TSM','INTC','MU','ARM','QCOM','ASML','TXN','LRCX','AMAT'],
+  'Quantum computing':['IONQ','RGTI','QBTS','QUBT','ARQQ','IBM'],
+  'Nuclear & uranium':['CCJ','SMR','OKLO','LEU','NNE','BWXT','CEG','VST','UUUU'],
+  'EV & autos':['TSLA','RIVN','LCID','NIO','F','GM'],
+  'Crypto & fintech stocks':['COIN','MSTR','HOOD','MARA','RIOT','PYPL','SQ'],
+  'Finance':['JPM','BAC','GS','V','MA','BRK-B'],
+  'ETFs':['SPY','QQQ','DIA','IWM','VTI','SMH','ARKK'],
+  'Energy':['XOM','CVX','COP','SLB'],
+  'Consumer':['NFLX','DIS','KO','NKE','SBUX','MCD'],
 };
-const DEFAULT_WL = {
-  crypto:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','DOGEUSDT'],
-  stock:['AAPL','NVDA','MSFT','TSLA','AMZN','META','GOOGL','AMD','SPY','QQQ'],
-};
+const DEFAULT_WL = ['BTCUSDT','ETHUSDT','SOLUSDT','AAPL','NVDA','TSLA','SPY','HOOD'];
 const state = {
-  market: 'crypto',
   symbol: 'BTCUSDT',
+  market: 'crypto',
   tf: '4h',
   chartView: 'sig',
   cfg: { rsiLen:14, emaF:50, emaS:200, thr:40 },
-  wlStore: JSON.parse(localStorage.getItem('tvs_wl2')||'null') || JSON.parse(JSON.stringify(DEFAULT_WL)),
-  watchlist: [],
+  watchlist: JSON.parse(localStorage.getItem('tvs_wl3')||'null') || DEFAULT_WL.slice(),
+  symMarket: JSON.parse(localStorage.getItem('tvs_symmkt')||'{}'),
   alerts: false,
   alertRules: JSON.parse(localStorage.getItem('tvs_rules')||'[]'),
   entries: JSON.parse(localStorage.getItem('tvs_entries')||'{}'),
   lastSignal: {},
   lastSig: null,
 };
-state.watchlist = state.wlStore[state.market];
+// auto-detect whether a symbol is crypto or a stock (no manual toggle needed)
+function marketOf(sym){
+  sym=(sym||'').toUpperCase();
+  if(state.symMarket[sym]) return state.symMarket[sym];
+  return /(USDT|USDC|BUSD|FDUSD|TUSD)$/.test(sym) ? 'crypto' : 'stock';
+}
+function saveSymMarket(){ localStorage.setItem('tvs_symmkt',JSON.stringify(state.symMarket)); }
+state.market = marketOf(state.symbol);
 const TFS = ['5m','15m','1h','4h','1d'];
 const TF_WEIGHT = {'5m':.5,'15m':.8,'1h':1,'4h':1.5,'1d':2};
 
@@ -670,24 +663,29 @@ async function loadBinanceSymbols(){
       return {symbol:s.symbol,name:s.symbol.slice(0,-q.length)+' / '+q,exch:'BINANCE'};});
   return _binanceSymbols;
 }
+async function searchCrypto(q){
+  const list=await loadBinanceSymbols();
+  const starts=list.filter(s=>s.symbol.startsWith(q));
+  const incl=list.filter(s=>!s.symbol.startsWith(q)&&s.symbol.includes(q));
+  const rank=a=>a.symbol.endsWith('USDT')?0:1;
+  return [...starts,...incl].sort((a,b)=>rank(a)-rank(b)).slice(0,8).map(s=>({...s,market:'crypto'}));
+}
+async function searchStock(q){
+  const url=`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0`;
+  const j=await proxiedJSON(url);
+  return (j.quotes||[])
+    .filter(x=>x.symbol&&['EQUITY','ETF','INDEX'].includes(x.quoteType))
+    .map(x=>({symbol:x.symbol,name:x.shortname||x.longname||'',exch:x.exchDisp||x.exchange||'STOCK',market:'stock'}))
+    .slice(0,8);
+}
+// merged search: query crypto + stocks at once, exact/prefix matches first
 async function searchSymbols(q){
   q=q.trim().toUpperCase();
   if(!q) return [];
-  if(state.market==='crypto'){
-    const list=await loadBinanceSymbols();
-    const starts=list.filter(s=>s.symbol.startsWith(q));
-    const incl=list.filter(s=>!s.symbol.startsWith(q)&&s.symbol.includes(q));
-    // prefer USDT pairs at the top
-    const rank=a=>a.symbol.endsWith('USDT')?0:1;
-    return [...starts,...incl].sort((a,b)=>rank(a)-rank(b)).slice(0,12);
-  } else {
-    const url=`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=12&newsCount=0`;
-    const j=await proxiedJSON(url);
-    return (j.quotes||[])
-      .filter(x=>x.symbol&&['EQUITY','ETF','INDEX'].includes(x.quoteType))
-      .map(x=>({symbol:x.symbol,name:x.shortname||x.longname||'',exch:x.exchDisp||x.exchange||'STOCK'}))
-      .slice(0,12);
-  }
+  const [c,s]=await Promise.allSettled([searchCrypto(q),searchStock(q)]);
+  const cr=c.status==='fulfilled'?c.value:[], st=s.status==='fulfilled'?s.value:[];
+  const score=r=>{ const sym=r.symbol.toUpperCase(); return sym===q?0:sym.startsWith(q)?1:2; };
+  return [...cr,...st].sort((a,b)=>score(a)-score(b)).slice(0,14);
 }
 
 /* ============================================================
@@ -1273,12 +1271,12 @@ function renderWatchlist(){
     wl.appendChild(el);
   });
 }
-function saveWl(){state.wlStore[state.market]=state.watchlist;localStorage.setItem('tvs_wl2',JSON.stringify(state.wlStore));}
+function saveWl(){localStorage.setItem('tvs_wl3',JSON.stringify(state.watchlist));}
 function renderPopular(){
   const wrap=$('popular');wrap.innerHTML='';
   const openState=JSON.parse(localStorage.getItem('tvs_secopen')||'{}');
-  Object.entries(POPULAR[state.market]).forEach(([name,syms],i)=>{
-    const key=state.market+':'+name;
+  Object.entries(POPULAR).forEach(([name,syms],i)=>{
+    const key=name;
     const isOpen = key in openState ? openState[key] : (i<2);   // first two sections open by default
     const g=document.createElement('div');g.className='pop-group';
     g.innerHTML=`<div class="pg-h${isOpen?' open':''}"><span class="pg-arrow">▸</span><span class="pg-name">${name}</span><span class="pg-count">${syms.length}</span></div>
@@ -1371,11 +1369,12 @@ async function analyze(){
 
 function selectSymbol(sym){
   state.symbol=sym.toUpperCase();
+  state.market=marketOf(state.symbol);          // auto crypto/stock from the symbol itself
   if(!state.watchlist.includes(state.symbol)){state.watchlist.unshift(state.symbol);saveWl();}
   $('ruleSym').textContent=state.symbol;
   $('symInput').value=state.symbol;
   loadEntryInput();
-  renderWatchlist();refreshActiveChart();analyze();
+  renderWatchlist();refreshActiveChart();analyze();startLive();
 }
 
 /* ============================================================
@@ -1521,9 +1520,9 @@ function renderPosition(){
 
 /* scanner */
 async function runScan(){
-  const tf=state.tf,mkt=state.market,syms=state.watchlist.slice(0,16);
+  const tf=state.tf,syms=state.watchlist.slice(0,16);
   const res=await Promise.allSettled(syms.map(async sym=>{
-    const c=await fetchCandles(sym,mkt,tf,200);
+    const c=await fetchCandles(sym,marketOf(sym),tf,200);
     const P=precompute(c,state.cfg);
     const s=signalAt(P,c.length-1,state.cfg);
     if(!s)throw new Error('no data');
@@ -1550,16 +1549,6 @@ function renderScan(rows){
 /* ============================================================
    EVENTS
 ============================================================ */
-$('market').addEventListener('click',e=>{
-  const b=e.target.closest('button');if(!b||b.dataset.m===state.market)return;
-  state.market=b.dataset.m;
-  [...$('market').children].forEach(c=>c.classList.toggle('on',c===b));
-  state.watchlist=state.wlStore[state.market];
-  state.symbol=state.watchlist[0]||(state.market==='crypto'?'BTCUSDT':'AAPL');
-  $('symInput').value=state.symbol;$('ruleSym').textContent=state.symbol;
-  loadEntryInput();
-  renderWatchlist();renderPopular();refreshActiveChart();analyze();startLive();
-});
 $('tfs').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   state.tf=b.dataset.tf;
@@ -1621,7 +1610,6 @@ $('wlAdd').onclick=()=>openSearchModal();
 let smTimer=null, smResults=[], smActive=-1, smSeq=0;
 function openSearchModal(seed=''){
   const m=$('searchModal'), inp=$('smInput');
-  [...$('smFilters').children].forEach(b=>b.classList.toggle('on',b.dataset.m===state.market));
   inp.value=(seed||'').toUpperCase();         // always start cleared (or with the typed char)
   $('smResults').innerHTML=''; smResults=[]; smActive=-1;
   m.classList.add('open');
@@ -1629,13 +1617,18 @@ function openSearchModal(seed=''){
 }
 function closeSearchModal(){ $('searchModal').classList.remove('open'); $('smInput').blur(); }
 function smHighlight(){ [...$('smResults').querySelectorAll('.sym-row')].forEach((el,i)=>el.classList.toggle('active',i===smActive)); }
-function smPick(sym){ closeSearchModal(); selectSymbol(sym); }
+function smPick(r){
+  if(typeof r==='string') r={symbol:r, market:marketOf(r)};
+  closeSearchModal();
+  if(r.market){ state.symMarket[r.symbol.toUpperCase()]=r.market; saveSymMarket(); }  // remember its type
+  selectSymbol(r.symbol);
+}
 function smRender(res){
   const wrap=$('smResults');
   if(!res.length){ wrap.innerHTML='<div class="sym-empty">'+t('search_none')+'</div>'; smActive=-1; return; }
-  wrap.innerHTML=res.map((r,i)=>`<div class="sym-row" data-i="${i}"><span class="r-sym">${r.symbol}</span><span class="r-name">${(r.name||'').replace(/</g,'&lt;')}</span><span class="r-tag">${r.exch||''}</span></div>`).join('');
+  wrap.innerHTML=res.map((r,i)=>`<div class="sym-row" data-i="${i}"><span class="r-sym">${r.symbol}</span><span class="r-name">${(r.name||'').replace(/</g,'&lt;')}</span><span class="r-tag" style="${r.market==='crypto'?'color:#f0b90b;border-color:rgba(240,185,11,.4)':''}">${r.market==='crypto'?'CRYPTO':(r.exch||'STOCK')}</span></div>`).join('');
   // click still selects a specific row; hover does NOT move the Enter target
-  [...wrap.querySelectorAll('.sym-row')].forEach(el=>{ el.onclick=()=>smPick(res[+el.dataset.i].symbol); });
+  [...wrap.querySelectorAll('.sym-row')].forEach(el=>{ el.onclick=()=>smPick(res[+el.dataset.i]); });
   smActive=0; smHighlight();   // first result is the Enter target by default
 }
 async function smDoSearch(){
@@ -1647,15 +1640,6 @@ async function smDoSearch(){
     if(seq!==smSeq) return;
     smResults=res; smRender(res);
   }catch(e){ $('smResults').innerHTML='<div class="sym-empty">'+t('search_unavail')+'</div>'; }
-}
-function setMarketForSearch(m){
-  if(state.market!==m){
-    state.market=m;
-    [...$('market').children].forEach(c=>c.classList.toggle('on',c.dataset.m===m));
-    state.watchlist=state.wlStore[m];
-    loadEntryInput(); renderWatchlist(); renderPopular();
-  }
-  [...$('smFilters').children].forEach(b=>b.classList.toggle('on',b.dataset.m===m));
 }
 (function setupSearchModal(){
   const inp=$('smInput');
@@ -1669,14 +1653,13 @@ function setMarketForSearch(m){
     if(e.key==='ArrowDown'&&n){ e.preventDefault(); smActive=Math.min(smActive+1,n-1); smHighlight(); }
     else if(e.key==='ArrowUp'&&n){ e.preventDefault(); smActive=Math.max(smActive-1,0); smHighlight(); }
     else if(e.key==='Enter'){ e.preventDefault();
-      if(smActive>=0&&smResults[smActive]) smPick(smResults[smActive].symbol);
-      else if(smResults.length) smPick(smResults[0].symbol);
+      if(smActive>=0&&smResults[smActive]) smPick(smResults[smActive]);
+      else if(smResults.length) smPick(smResults[0]);
       else if(inp.value.trim()) smPick(inp.value.trim()); }
     else if(e.key==='Escape'){ closeSearchModal(); }
   });
   $('searchModalClose').onclick=closeSearchModal;
   $('searchModal').addEventListener('click',e=>{ if(e.target===$('searchModal')) closeSearchModal(); });
-  $('smFilters').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; setMarketForSearch(b.dataset.m); smDoSearch(); inp.focus(); });
 })();
 /* start typing anywhere → open the search modal (like TradingView) */
 document.addEventListener('keydown',e=>{
