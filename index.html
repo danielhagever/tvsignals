@@ -619,18 +619,51 @@ const YF_TF = {
   '4h' :{interval:'60m',range:'1y', resample:4},
   '1d' :{interval:'1d', range:'2y'},
 };
-// Public CORS proxies tried in order (no key, best-effort).
+// Public CORS proxies tried in order (no key, best-effort). Each entry builds the
+// proxied URL and says how to unwrap the response.
 const PROXIES = [
-  u=>`https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u=>({u:`https://corsproxy.io/?url=${encodeURIComponent(u)}`}),
+  u=>({u:`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`}),
+  u=>({u:`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, wrap:true}),
+  u=>({u:`https://thingproxy.freeboard.io/fetch/${u}`}),
 ];
+// fetch with a hard timeout so one hung proxy can't stall the whole queue
+function _fetchT(u,ms=12000){
+  const c=new AbortController(); const t=setTimeout(()=>c.abort(),ms);
+  return fetch(u,{cache:'no-store',signal:c.signal}).finally(()=>clearTimeout(t));
+}
+// Stock data goes through free proxies that RATE-LIMIT bursts. The app asks for
+// ~5 timeframes + a ticker at once (confluence), which instantly trips a 403.
+// So: (1) run proxied requests ONE AT A TIME (global queue), and (2) micro-cache
+// each result so the multi-TF pass + live refresh reuse instead of re-hammering.
+const _pxCache=new Map();          // key -> {t, data}
+let _pxChain=Promise.resolve();    // concurrency = 1
+const PX_TTL=25000;
+function _pxRun(fn){ const r=_pxChain.then(fn,fn); _pxChain=r.catch(()=>{}); return r; }
 async function proxiedJSON(url){
-  let lastErr;
-  for(const p of PROXIES){
-    try{ const r=await fetch(p(url),{cache:'no-store'}); if(r.ok) return await r.json(); lastErr=new Error('HTTP '+r.status); }
-    catch(e){ lastErr=e; }
-  }
-  throw lastErr||new Error('All proxies failed');
+  const key=url.replace(/[?&]_=\d+/,'');                 // ignore cache-buster in the key
+  const hit=_pxCache.get(key);
+  if(hit && Date.now()-hit.t<PX_TTL) return hit.data;
+  return _pxRun(async()=>{
+    const again=_pxCache.get(key);                       // another queued call may have just filled it
+    if(again && Date.now()-again.t<PX_TTL) return again.data;
+    let lastErr;
+    for(let attempt=0; attempt<2; attempt++){
+      for(let i=0;i<PROXIES.length;i++){
+        const spec=PROXIES[i](url);
+        try{
+          const r=await _fetchT(spec.u);
+          if(!r.ok){ lastErr=new Error('HTTP '+r.status); continue; }
+          let data=await r.json();
+          if(spec.wrap) data = typeof data.contents==='string' ? JSON.parse(data.contents) : data.contents;
+          if(data){ _pxCache.set(key,{t:Date.now(),data}); return data; }
+          lastErr=new Error('empty');
+        }catch(e){ lastErr=e; }
+      }
+      if(attempt===0) await new Promise(r=>setTimeout(r,500));   // brief backoff, then one more pass
+    }
+    throw lastErr||new Error('All proxies failed');
+  });
 }
 function resample(c,n){
   const out=[];
