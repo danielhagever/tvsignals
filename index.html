@@ -70,8 +70,9 @@
   .wl-item:hover{background:var(--panel2)}
   .wl-item.on{background:var(--panel2);outline:1px solid var(--line)}
   .wl-item .sym{font-weight:600}
-  .wl-item .dot{width:8px;height:8px;border-radius:50%;margin-left:auto;background:var(--muted)}
-  .wl-item .x{color:var(--muted);opacity:0;margin-left:6px}
+  .wl-item .chg{margin-left:auto;font-size:11px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .wl-item .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+  .wl-item .x{color:var(--muted);opacity:0;margin-left:2px}
   .wl-item:hover .x{opacity:1}
   .hint{color:var(--muted);font-size:12px;padding:8px 4px}
   /* ---- chart ---- */
@@ -1284,6 +1285,7 @@ function renderWatchlist(){
     const el=document.createElement('div');
     el.className='wl-item'+(sym===state.symbol?' on':'');
     el.innerHTML=`<span class="sym">${sym}</span>
+      <span class="chg" id="chg-${sym}"></span>
       <span class="dot" id="dot-${sym}"></span>
       <span class="x" title="remove">✕</span>`;
     el.onclick=()=>selectSymbol(sym);
@@ -1291,6 +1293,44 @@ function renderWatchlist(){
       state.watchlist=state.watchlist.filter(s=>s!==sym);saveWl();renderWatchlist();};
     wl.appendChild(el);
   });
+  paintWatchlistChanges();
+  loadWatchlistChanges();
+}
+state.dayChange={};
+function paintWatchlistChanges(){
+  state.watchlist.forEach(sym=>{
+    const el=document.getElementById('chg-'+sym); if(!el) return;
+    const v=state.dayChange[sym];
+    if(v==null){ el.textContent=''; return; }
+    el.textContent=(v>=0?'+':'')+v.toFixed(2)+'%';
+    el.style.color=v>=0?'var(--buy)':'var(--sell)';
+  });
+}
+let _chgLast=0, _chgBusy=false;
+async function loadWatchlistChanges(force){
+  if(_chgBusy) return;
+  if(!force && Date.now()-_chgLast<25000){ paintWatchlistChanges(); return; }
+  _chgBusy=true; _chgLast=Date.now();
+  try{
+    const syms=state.watchlist.slice();
+    const crypto=syms.filter(s=>marketOf(s)==='crypto'), stock=syms.filter(s=>marketOf(s)==='stock');
+    const jobs=[];
+    if(crypto.length) jobs.push((async()=>{
+      try{
+        const r=await fetch('https://api.binance.com/api/v3/ticker/24hr?symbols='+encodeURIComponent(JSON.stringify(crypto)),{cache:'no-store'});
+        if(r.ok){ (await r.json()).forEach(x=>{ state.dayChange[x.symbol]=+x.priceChangePercent; }); }
+      }catch(e){}
+    })());
+    stock.forEach(sym=>jobs.push((async()=>{
+      try{
+        const j=await proxiedJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=1d&_=${Date.now()}`);
+        const m=j.chart.result[0].meta, prev=m.chartPreviousClose||m.previousClose;
+        if(m.regularMarketPrice!=null && prev) state.dayChange[sym]=(m.regularMarketPrice-prev)/prev*100;
+      }catch(e){}
+    })()));
+    await Promise.allSettled(jobs);
+    paintWatchlistChanges();
+  } finally { _chgBusy=false; }
 }
 function saveWl(){localStorage.setItem('tvs_wl3',JSON.stringify(state.watchlist));}
 function renderPopular(){
@@ -1947,6 +1987,7 @@ renderWatchlist();renderPopular();renderRules();
 setupLangToggle();
 setupHelp();
 startOnboarding();
+setInterval(()=>loadWatchlistChanges(true), 60000);   // refresh watchlist daily % every minute
 window.addEventListener('DOMContentLoaded',()=>{refreshActiveChart();analyze();startLive();});
 if(document.readyState!=='loading'){refreshActiveChart();analyze();startLive();}
 </script>
