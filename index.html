@@ -123,7 +123,12 @@
   .pos-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
   .pos-cell{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
   .pos-cell span{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
-  .pos-cell b{font-size:14px}
+  .pos-cell b{font-size:14px;display:block;word-break:break-word}
+  .pos-cell b .pct{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-top:2px;text-transform:none;letter-spacing:normal}
+  /* hide number-input spinner arrows */
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  input[type=number]{-moz-appearance:textfield;appearance:textfield}
   .pos-cell.buyc{border-left:3px solid var(--buy)}
   .pos-cell.sellc{border-left:3px solid #2da7ff}
   .pos-cell.stopc{border-left:3px solid var(--sell)}
@@ -261,7 +266,7 @@
       <h3>My position · smart plan</h3>
       <div class="pos-entry">
         <label>I bought at</label>
-        <input id="entryPrice" type="number" step="any" placeholder="enter your buy price" />
+        <input id="entryPrice" type="number" inputmode="decimal" step="any" placeholder="enter your buy price" />
       </div>
       <div class="hint" id="posHint" style="padding:4px 2px 0">Enter your entry price to get smart buy/sell levels.</div>
       <div id="posBody" style="display:none">
@@ -1165,6 +1170,7 @@ function positionPlan(entry,price,atr,candles){
   const supNear=levels.filter(l=>l.price<entry&&l.price>stop-atr).sort((a,b)=>b.price-a.price)[0];
   if(supNear) stop=Math.min(stop,supNear.price-0.25*atr);
   stop=Math.min(stop,entry-0.5*atr);            // keep it meaningfully below entry
+  stop=Math.max(stop,0);                        // a stop price can't be negative
   const risk=entry-stop;
   // sell targets: forward-looking — next resistance ABOVE current price (ATR fallback)
   const floor=Math.max(price,entry)+Math.max(0.8*atr,0.3*risk);
@@ -1201,10 +1207,11 @@ function renderPosition(){
   const [vcls,vtext]=positionVerdict(plan,price,entry,sig);
   const vd=$('posVerdict'); vd.className='pos-verdict '+vcls; vd.textContent=vtext;
   const pct=p=>(p>=0?'+':'')+(p*100).toFixed(1)+'%';
+  const cell=(price,p)=>`${fmt(price)}<span class="pct">${pct(p)}</span>`;
   $('posAdd').textContent=fmt(plan.addZone);
-  $('posT1').textContent=`${fmt(plan.t1)}  (${pct((plan.t1-entry)/entry)})`;
-  $('posT2').textContent=`${fmt(plan.t2)}  (${pct((plan.t2-entry)/entry)})`;
-  $('posStop').textContent=`${fmt(plan.stop)}  (${pct((plan.stop-entry)/entry)})`;
+  $('posT1').innerHTML=cell(plan.t1,(plan.t1-entry)/entry);
+  $('posT2').innerHTML=cell(plan.t2,(plan.t2-entry)/entry);
+  $('posStop').innerHTML=cell(plan.stop,(plan.stop-entry)/entry);
   $('posRR').textContent='1 : '+plan.rr.toFixed(1);
   $('posNote').textContent=`Stop = 1.5×ATR below entry, snapped under support; targets at 1.5R / 2.5R into resistance. Live engine reads ${sig.action} (score ${sig.score}).`;
   state.entries[state.symbol]=entry; saveEntries();
