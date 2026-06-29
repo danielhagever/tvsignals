@@ -95,10 +95,17 @@
   #helpTip{position:fixed;z-index:300;max-width:280px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;font-size:12px;line-height:1.55;color:var(--txt);box-shadow:var(--shadow);display:none;font-weight:400;text-transform:none;letter-spacing:normal}
   #helpTip.show{display:block}
   .verdict{display:flex;align-items:center;gap:12px}
-  .badge{font-size:22px;font-weight:800;padding:8px 16px;border-radius:10px;letter-spacing:.5px}
+  .badge{font-size:18px;font-weight:800;padding:9px 14px;border-radius:10px;letter-spacing:.4px;white-space:nowrap;text-align:center;line-height:1.1}
   .badge.BUY{background:rgba(22,199,132,.15);color:var(--buy)}
   .badge.SELL{background:rgba(234,57,67,.15);color:var(--sell)}
   .badge.HOLD{background:rgba(240,185,11,.15);color:var(--hold)}
+  .badge.t-sbuy{background:rgba(22,199,132,.26);color:#26e6a0}
+  .badge.t-buy{background:rgba(22,199,132,.15);color:var(--buy)}
+  .badge.t-lbuy{background:rgba(22,199,132,.10);color:#6bd0a4}
+  .badge.t-neutral{background:rgba(240,185,11,.12);color:var(--hold)}
+  .badge.t-lsell{background:rgba(234,57,67,.10);color:#ef8a84}
+  .badge.t-sell{background:rgba(234,57,67,.15);color:var(--sell)}
+  .badge.t-ssell{background:rgba(234,57,67,.26);color:#ff5d5d}
   .gauge{flex:1}
   .gauge-bar{height:8px;border-radius:6px;background:linear-gradient(90deg,var(--sell),#3a4256 50%,var(--buy));position:relative;margin-top:6px}
   .gauge-bar i{position:absolute;top:-3px;width:3px;height:14px;background:#fff;border-radius:2px;transition:left .3s}
@@ -872,6 +879,17 @@ function signalAt(P,i,cfg){
   const action=score>=cfg.thr?'BUY':score<=-cfg.thr?'SELL':'HOLD';
   return {action,score,reasons,price:close[i],idx:i,atr:atr[i]??null};
 }
+// 7-tier directional label (display) — splits the HOLD band into Lean Buy / Neutral / Lean Sell
+function signalTier(score, thr){
+  const strong=Math.max(65, thr+20);
+  if(score>=strong) return {label:'STRONG BUY', cls:'t-sbuy'};
+  if(score>=thr)    return {label:'BUY',         cls:'t-buy'};
+  if(score>=12)     return {label:'LEAN BUY',    cls:'t-lbuy'};
+  if(score>-12)     return {label:'NEUTRAL',     cls:'t-neutral'};
+  if(score>-thr)    return {label:'LEAN SELL',   cls:'t-lsell'};
+  if(score>-strong) return {label:'SELL',        cls:'t-sell'};
+  return {label:'STRONG SELL', cls:'t-ssell'};
+}
 
 /* multi-timeframe confluence: fetch each TF, score latest bar */
 async function multiTimeframe(symbol,market,cfg){
@@ -1281,7 +1299,8 @@ function renderPopular(){
 
 function paintSignal(sig,mtf,conf){
   $('sigSym').textContent=state.symbol;
-  const badge=$('badge');badge.className='badge '+sig.action;badge.textContent=sig.action;
+  const tier=signalTier(sig.score, state.cfg.thr);
+  const badge=$('badge');badge.className='badge '+tier.cls;badge.textContent=tier.label;
   $('scoreNum').textContent=sig.score;
   $('needle').style.left=((sig.score+100)/200*100)+'%';
   const ul=$('reasons');ul.innerHTML='';
@@ -1496,7 +1515,7 @@ function renderPosition(){
   $('posT2').innerHTML=cell(plan.t2,(plan.t2-entry)/entry);
   $('posStop').innerHTML=cell(plan.stop,(plan.stop-entry)/entry);
   $('posRR').textContent='1 : '+plan.rr.toFixed(1);
-  $('posNote').textContent=`Stop = 1.5×ATR below entry, snapped under support; targets at 1.5R / 2.5R into resistance. Live engine reads ${sig.action} (score ${sig.score}).`;
+  $('posNote').textContent=`Stop = 1.5×ATR below entry, snapped under support; targets at 1.5R / 2.5R into resistance. Live engine reads ${signalTier(sig.score,state.cfg.thr).label} (score ${sig.score}).`;
   state.entries[state.symbol]=entry; saveEntries();
 }
 
@@ -1516,12 +1535,13 @@ function renderScan(rows){
   const wrap=$('scanRows');wrap.innerHTML='';
   if(!rows.length){wrap.innerHTML='<div class="hint" style="padding:6px">No results — try another timeframe.</div>';return;}
   rows.forEach(r=>{
-    const col=r.action==='BUY'?'var(--buy)':r.action==='SELL'?'var(--sell)':'var(--hold)';
+    const tier=signalTier(r.score, state.cfg.thr);
+    const col=/buy/.test(tier.cls)?'var(--buy)':/sell/.test(tier.cls)?'var(--sell)':'var(--hold)';
     const w=Math.abs(r.score)/100*45;
     const el=document.createElement('div');el.className='scan-row';
     el.innerHTML=`<span class="s">${r.sym}</span>
       <div class="scan-bar"><i style="${r.score>=0?'left:50%':'right:50%'};width:${w}%;background:${col}"></i></div>
-      <span class="a" style="color:${col}">${r.action} ${r.score>0?'+':''}${r.score}</span>`;
+      <span class="a" style="color:${col}">${tier.label} ${r.score>0?'+':''}${r.score}</span>`;
     el.onclick=()=>selectSymbol(r.sym);
     wrap.appendChild(el);
   });
