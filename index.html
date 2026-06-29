@@ -1035,7 +1035,7 @@ function buildSignalMarkers(candles,P){
   return markers;
 }
 /* ---- chart overlays: pre/after-market sessions + chart patterns ---- */
-let overlayCanvas=null, _sessionData=null, _patterns=null;
+let overlayCanvas=null, _sessionData=null, _patterns=null, _chartTimes=null, _ovDims={w:0,h:0,dpr:0}, _ovRaf=false;
 function ensureOverlayCanvas(){
   if(overlayCanvas) return;
   const host=$('sig_chart'); if(!host) return;
@@ -1043,14 +1043,20 @@ function ensureOverlayCanvas(){
   overlayCanvas=document.createElement('canvas');
   overlayCanvas.style.cssText='position:absolute;inset:0;pointer-events:none;z-index:3';
   host.appendChild(overlayCanvas);
-  try{ new ResizeObserver(()=>drawOverlays()).observe(host); }catch(e){}
+  try{ new ResizeObserver(()=>scheduleOverlays()).observe(host); }catch(e){}
 }
+// coalesce redraws into one per animation frame, in sync with the chart's own paint
+function scheduleOverlays(){ if(_ovRaf) return; _ovRaf=true; requestAnimationFrame(()=>{ _ovRaf=false; drawOverlays(); }); }
 function drawOverlays(){
   if(!overlayCanvas||!sigChart) return;
   const host=$('sig_chart'), W=host.clientWidth, H=host.clientHeight, dpr=window.devicePixelRatio||1;
-  overlayCanvas.width=W*dpr; overlayCanvas.height=H*dpr;
-  overlayCanvas.style.width=W+'px'; overlayCanvas.style.height=H+'px';
-  const ctx=overlayCanvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+  const ctx=overlayCanvas.getContext('2d');
+  if(_ovDims.w!==W||_ovDims.h!==H||_ovDims.dpr!==dpr){   // only resize when the box actually changes (avoids flicker on pan)
+    overlayCanvas.width=W*dpr; overlayCanvas.height=H*dpr;
+    overlayCanvas.style.width=W+'px'; overlayCanvas.style.height=H+'px';
+    _ovDims={w:W,h:H,dpr};
+  }
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
   drawSessionsOn(ctx,W,H);
   drawPatternsOn(ctx,W,H);
 }
@@ -1072,7 +1078,8 @@ function drawSessionsOn(ctx,W,H){
 function drawPatternsOn(ctx,W,H){
   if(!state.showPatterns || !_patterns || !_patterns.length || !sigSeries) return;
   const ts=sigChart.timeScale();
-  const X=t=>ts.timeToCoordinate(Math.floor(t/1000));
+  // anchor to the bar's LOGICAL index → stays locked to the candles even when scrolled off-screen
+  const X=t=>{ const idx=_chartTimes&&_chartTimes.get(t); return idx!=null ? ts.logicalToCoordinate(idx) : ts.timeToCoordinate(Math.floor(t/1000)); };
   const Y=p=>sigSeries.priceToCoordinate(p);
   const colOf=d=>d==='bull'?'#16c784':d==='bear'?'#ea3943':'#8a7dff';
   _patterns.forEach(pat=>{
@@ -1227,7 +1234,7 @@ async function loadSignalChart(fit=true){
         timeScale:{borderColor:'#222a3a',timeVisible:true,secondsVisible:false},
         crosshair:{mode:LightweightCharts.CrosshairMode.Normal},
       });
-      sigChart.timeScale().subscribeVisibleLogicalRangeChange(()=>drawOverlays());
+      sigChart.timeScale().subscribeVisibleLogicalRangeChange(()=>scheduleOverlays());
       sigSeries=sigChart.addCandlestickSeries({upColor:'#16c784',downColor:'#ea3943',
         borderVisible:false,wickUpColor:'#16c784',wickDownColor:'#ea3943',
         priceLineColor:'#cbd5e1',priceLineStyle:LightweightCharts.LineStyle.Dashed});
@@ -1249,6 +1256,7 @@ async function loadSignalChart(fit=true){
     _sessionData = (usePre && candles.sessions && candles.sessions.regular.length)
       ? {candles, ...candles.sessions} : null;
     _patterns = detectPatterns(candles);
+    _chartTimes = new Map(candles.map((c,i)=>[c.t, i]));   // ms-time → bar index, for locking overlays
     drawOverlays();
     const last=markers[markers.length-1];
     $('sigBanner').innerHTML=last
