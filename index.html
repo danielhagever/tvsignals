@@ -91,6 +91,8 @@
   .right{background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:14px}
   .card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
   .card h3{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}
+  .star-btn{cursor:pointer;color:var(--muted);font-size:15px;margin-inline-start:7px;vertical-align:middle;text-transform:none;letter-spacing:normal;line-height:1}
+  .star-btn:hover,.star-btn.on{color:var(--hold)}
   .help-dot{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--line);color:var(--muted);font-size:10px;font-weight:700;cursor:pointer;margin-inline-start:7px;vertical-align:middle;text-transform:none;letter-spacing:normal;line-height:1;flex:none}
   .help-dot:hover{color:var(--accent);border-color:var(--accent)}
   #helpTip{position:fixed;z-index:300;max-width:280px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;font-size:12px;line-height:1.55;color:var(--txt);box-shadow:var(--shadow);display:none;font-weight:400;text-transform:none;letter-spacing:normal}
@@ -340,7 +342,7 @@
 
   <div class="right">
     <div class="card">
-      <h3><span data-i18n="card_signal">Signal</span> · <span id="sigSym">—</span><span class="help-dot" data-help="signal">?</span></h3>
+      <h3><span data-i18n="card_signal">Signal</span> · <span id="sigSym">—</span><span id="starBtn" class="star-btn" title="Add to watchlist">☆</span><span class="help-dot" data-help="signal">?</span></h3>
       <div class="verdict">
         <div class="badge HOLD" id="badge">…</div>
         <div class="gauge">
@@ -458,7 +460,7 @@
 <div class="modal-overlay sym-modal" id="searchModal">
   <div class="sym-box">
     <div class="sym-head">
-      <h2 data-i18n="search_title">Symbol search</h2>
+      <h2 id="searchModalTitle" data-i18n="search_title">Symbol search</h2>
       <button class="modal-x" id="searchModalClose" title="Close">✕</button>
     </div>
     <div class="sym-input-wrap">
@@ -1437,11 +1439,22 @@ function selectSymbol(sym){
   state.symbol=sym.toUpperCase();
   state.market=marketOf(state.symbol);          // auto crypto/stock from the symbol itself
   localStorage.setItem('tvs_lastsym',state.symbol);   // remember across reloads
-  if(!state.watchlist.includes(state.symbol)){state.watchlist.unshift(state.symbol);saveWl();}
   $('ruleSym').textContent=state.symbol;
   $('symInput').value=state.symbol;
+  updateStar();
   loadEntryInput();
   renderWatchlist();refreshActiveChart();analyze();startLive();
+}
+function addToWatchlist(sym){
+  sym=sym.toUpperCase();
+  if(!state.watchlist.includes(sym)){ state.watchlist.unshift(sym); saveWl(); renderWatchlist(); loadWatchlistChanges(true); }
+}
+function updateStar(){
+  const b=$('starBtn'); if(!b) return;
+  const inList=state.watchlist.includes(state.symbol);
+  b.textContent=inList?'★':'☆';
+  b.classList.toggle('on',inList);
+  b.title=inList?'Remove from watchlist':'Add to watchlist';
 }
 
 /* ============================================================
@@ -1673,14 +1686,21 @@ updateLiveBtn();
 // header symbol box is now a trigger that opens the modal (shows the current symbol)
 const symInput=$('symInput');
 symInput.readOnly=true;
-symInput.addEventListener('mousedown',e=>{ e.preventDefault(); openSearchModal(); });
-$('wlAdd').onclick=()=>openSearchModal();
+symInput.addEventListener('mousedown',e=>{ e.preventDefault(); openSearchModal(); });          // view only
+$('wlAdd').onclick=()=>openSearchModal('', true);                                              // "+ add" → adds to watchlist
+$('starBtn').onclick=()=>{
+  if(state.watchlist.includes(state.symbol)) state.watchlist=state.watchlist.filter(s=>s!==state.symbol);
+  else state.watchlist.unshift(state.symbol);
+  saveWl(); renderWatchlist(); updateStar(); loadWatchlistChanges(true);
+};
 
-let smTimer=null, smResults=[], smActive=-1, smSeq=0;
-function openSearchModal(seed=''){
+let smTimer=null, smResults=[], smActive=-1, smSeq=0, smAddMode=false;
+function openSearchModal(seed='', addMode=false){
+  smAddMode=addMode;
   const m=$('searchModal'), inp=$('smInput');
   inp.value=(seed||'').toUpperCase();         // always start cleared (or with the typed char)
   $('smResults').innerHTML=''; smResults=[]; smActive=-1;
+  $('searchModalTitle').textContent = addMode ? t('search_add') : t('search_title');
   m.classList.add('open');
   setTimeout(()=>{ inp.focus(); if(inp.value) smDoSearch(); },20);
 }
@@ -1690,6 +1710,7 @@ function smPick(r){
   if(typeof r==='string') r={symbol:r, market:marketOf(r)};
   closeSearchModal();
   if(r.market){ state.symMarket[r.symbol.toUpperCase()]=r.market; saveSymMarket(); }  // remember its type
+  if(smAddMode){ const s=r.symbol.toUpperCase(); if(!state.watchlist.includes(s)){ state.watchlist.unshift(s); saveWl(); } }
   selectSymbol(r.symbol);
 }
 function smRender(res){
@@ -1817,7 +1838,7 @@ const I18N={
     card_backtest:'Backtest', bt_btn:'Run backtest on this TF',
     card_alerts:'Alerts', alert_enable:'🔔 Enable alerts', alert_disable:'🔕 Disable alerts',
     card_settings:'⚙ Analysis settings', fineprint:'⚠ Not financial advice · Terms',
-    search_title:'Symbol search', search_none:'No matches', search_unavail:'Search unavailable', search_hint:'Start typing to search · Esc to close',
+    search_title:'Symbol search', search_add:'Add to watchlist', search_none:'No matches', search_unavail:'Search unavailable', search_hint:'Start typing to search · Esc to close',
     patterns:'◈ Patterns',
   },
   he:{
@@ -1839,7 +1860,7 @@ const I18N={
     card_backtest:'בדיקה לאחור', bt_btn:'הרץ בדיקה לאחור',
     card_alerts:'התראות', alert_enable:'🔔 הפעל התראות', alert_disable:'🔕 כבה התראות',
     card_settings:'⚙ הגדרות ניתוח', fineprint:'⚠ אינו ייעוץ פיננסי · תנאים',
-    search_title:'חיפוש סימול', search_none:'אין תוצאות', search_unavail:'החיפוש אינו זמין', search_hint:'התחל/י להקליד כדי לחפש · Esc לסגירה',
+    search_title:'חיפוש סימול', search_add:'הוספה לרשימת מעקב', search_none:'אין תוצאות', search_unavail:'החיפוש אינו זמין', search_hint:'התחל/י להקליד כדי לחפש · Esc לסגירה',
     patterns:'◈ תבניות',
   },
 };
@@ -1981,6 +2002,7 @@ $('termsGate').addEventListener('click',e=>{
 
 $('symInput').value=state.symbol;
 $('ruleSym').textContent=state.symbol;
+updateStar();
 [...$('tfs').children].forEach(b=>b.classList.toggle('on',b.dataset.tf===state.tf));  // restore saved timeframe
 loadEntryInput();
 renderWatchlist();renderPopular();renderRules();
