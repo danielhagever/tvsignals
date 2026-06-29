@@ -13,6 +13,13 @@
     --shadow:0 6px 24px rgba(0,0,0,.4);
   }
   *{box-sizing:border-box}
+  /* slim, subtle scrollbars — same clean look on Windows as on macOS */
+  *{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.30);background-clip:padding-box}
+  ::-webkit-scrollbar-corner{background:transparent}
   html,body{margin:0;height:100%}
   body{
     background:var(--bg);color:var(--txt);
@@ -1406,7 +1413,12 @@ document.addEventListener('keydown',e=>{
   if(/INPUT|TEXTAREA|SELECT/.test(tag)) return;
   if($('searchModal').classList.contains('open')) return;
   if($('termsGate').classList.contains('show')||$('langGate').classList.contains('show')||$('faqModal').classList.contains('open')) return;
-  if(e.key && e.key.length===1 && /[A-Za-z0-9]/.test(e.key)){ openSearchModal(e.key); e.preventDefault(); }
+  // open on ANY single letter/number key — incl. Hebrew & other layouts (digits are layout-independent)
+  if(e.key && e.key.length===1 && /[\p{L}\p{N}]/u.test(e.key)){
+    const seed=/[A-Za-z0-9]/.test(e.key)?e.key:'';   // tickers are Latin, so don't seed with a non-Latin char
+    openSearchModal(seed);
+    e.preventDefault();
+  }
 });
 $('btBtn').onclick=async()=>{
   $('btBtn').disabled=true;$('btBtn').textContent='Running…';
