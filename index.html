@@ -147,9 +147,14 @@
   .rule-item .rx{margin-left:auto;color:var(--muted);cursor:pointer}
   .rule-item .rx:hover{color:var(--sell)}
   /* sidebar popular */
-  .pop-group{margin-bottom:8px}
-  .pop-group .pg-h{font-size:11px;color:var(--muted);margin:8px 4px 5px;text-transform:uppercase;letter-spacing:.5px}
-  .pop-chips{display:flex;flex-wrap:wrap;gap:5px}
+  .pop-group{margin-bottom:3px}
+  .pg-h{display:flex;align-items:center;gap:7px;cursor:pointer;padding:8px 8px;border-radius:7px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;user-select:none}
+  .pg-h:hover{background:var(--panel2);color:var(--txt)}
+  .pg-arrow{display:inline-block;transition:transform .15s;font-size:9px;opacity:.8}
+  .pg-h.open .pg-arrow{transform:rotate(90deg)}
+  .pg-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pg-count{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:1px 7px;font-size:10px}
+  .pop-chips{display:flex;flex-wrap:wrap;gap:5px;padding:3px 4px 9px}
   .pop-chips button{border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:12px;padding:5px 9px;border-radius:7px}
   .pop-chips button:hover{border-color:var(--accent);color:var(--accent)}
   /* FAQ button + modal */
@@ -171,6 +176,21 @@
   /* persistent disclaimer badge */
   .fineprint{position:fixed;bottom:9px;right:12px;z-index:40;font-size:11px;font-weight:600;color:var(--muted);background:rgba(17,21,31,.8);border:1px solid var(--line);border-radius:7px;padding:5px 10px;cursor:pointer;backdrop-filter:blur(3px)}
   .fineprint:hover{color:var(--hold);border-color:var(--hold)}
+  /* RTL (Hebrew) tweaks — flip corner-anchored elements */
+  [dir="rtl"] .chart-legend{left:auto;right:12px}
+  [dir="rtl"] .fineprint{right:auto;left:12px}
+  [dir="rtl"] .gauge-bar i{transition:none}
+  /* language picker */
+  .langgate{z-index:600}
+  .lang-box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px 26px;max-width:380px;width:100%;text-align:center;box-shadow:var(--shadow)}
+  .lang-box h2{margin:0 0 4px;color:#fff;font-size:24px;font-weight:800;letter-spacing:.5px}
+  .lang-box h2 span{color:var(--accent)}
+  .lang-box>p{margin:0 0 20px;color:var(--muted);font-size:13px}
+  .lang-opts{display:flex;gap:12px}
+  .lang-btn{flex:1;display:flex;flex-direction:column;gap:5px;align-items:center;padding:20px 14px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);border-radius:11px;cursor:pointer}
+  .lang-btn:hover{border-color:var(--accent);color:#fff}
+  .lang-btn b{font-size:19px}
+  .lang-btn span{font-size:11px;color:var(--muted);letter-spacing:1.5px}
   /* terms gate */
   .gate{position:fixed;inset:0;background:rgba(5,7,11,.94);backdrop-filter:blur(5px);z-index:500;display:none;align-items:center;justify-content:center;padding:16px}
   .gate.show{display:flex}
@@ -205,13 +225,13 @@
 <div class="app">
   <header>
     <div class="logo">TV<span>Signals</span></div>
-    <button id="faqBtn" class="faq-btn" title="How it works">FAQ</button>
+    <button id="faqBtn" class="faq-btn" title="How it works" data-i18n="faq_btn">FAQ</button>
     <div class="seg" id="market">
-      <button data-m="crypto" class="on">Crypto</button>
-      <button data-m="stock">Stock</button>
+      <button data-m="crypto" class="on" data-i18n="mkt_crypto">Crypto</button>
+      <button data-m="stock" data-i18n="mkt_stock">Stock</button>
     </div>
     <div class="search">
-      <input id="symInput" placeholder="Search symbol or name — e.g. BTC, AAPL, apple…" autocomplete="off" spellcheck="false" />
+      <input id="symInput" placeholder="Search symbol or name — e.g. BTC, AAPL, apple…" data-i18n-ph="search_ph" autocomplete="off" spellcheck="false" />
       <div id="searchResults" class="search-results"></div>
     </div>
     <div class="tf-pills" id="tfs">
@@ -224,11 +244,11 @@
   </header>
 
   <aside>
-    <div class="side-h"><span>Watchlist</span><span id="wlAdd" style="cursor:pointer;color:var(--accent)">+ add</span></div>
+    <div class="side-h"><span data-i18n="wl_title">Watchlist</span><span id="wlAdd" style="cursor:pointer;color:var(--accent)" data-i18n="wl_add">+ add</span></div>
     <div id="watchlist"></div>
-    <div class="side-h" style="margin-top:14px"><span>Popular</span></div>
+    <div class="side-h" style="margin-top:14px"><span data-i18n="popular">Popular</span></div>
     <div id="popular"></div>
-    <div class="hint">Tap any symbol to load it. Or type one in the search bar — the chart also searches TradingView's full universe.</div>
+    <div class="hint" data-i18n="side_hint">Tap any symbol to load it. Or type one in the search bar — the chart also searches TradingView's full universe.</div>
   </aside>
 
   <main>
@@ -251,7 +271,7 @@
 
   <div class="right">
     <div class="card">
-      <h3>Signal · <span id="sigSym">—</span></h3>
+      <h3><span data-i18n="card_signal">Signal</span> · <span id="sigSym">—</span></h3>
       <div class="verdict">
         <div class="badge HOLD" id="badge">…</div>
         <div class="gauge">
@@ -263,52 +283,52 @@
     </div>
 
     <div class="card">
-      <h3>My position · smart plan</h3>
+      <h3 data-i18n="card_position">My position · smart plan</h3>
       <div class="pos-entry">
-        <label>I bought at</label>
+        <label data-i18n="pos_bought">I bought at</label>
         <input id="entryPrice" type="number" inputmode="decimal" step="any" placeholder="enter your buy price" />
       </div>
-      <div class="hint" id="posHint" style="padding:4px 2px 0">Enter your entry price to get smart buy/sell levels.</div>
+      <div class="hint" id="posHint" style="padding:4px 2px 0" data-i18n="pos_hint">Enter your entry price to get smart buy/sell levels.</div>
       <div id="posBody" style="display:none">
-        <div class="kv"><span>Current price</span><b id="posCur">—</b></div>
-        <div class="kv"><span>Unrealized P/L</span><b id="posPL">—</b></div>
+        <div class="kv"><span data-i18n="pos_cur">Current price</span><b id="posCur">—</b></div>
+        <div class="kv"><span data-i18n="pos_pl">Unrealized P/L</span><b id="posPL">—</b></div>
         <div class="pos-verdict neu" id="posVerdict">—</div>
         <div class="pos-grid">
-          <div class="pos-cell buyc"><span>Add / buy zone</span><b id="posAdd">—</b></div>
-          <div class="pos-cell sellc"><span>Sell target 1</span><b id="posT1">—</b></div>
-          <div class="pos-cell stopc"><span>Stop-loss</span><b id="posStop">—</b></div>
-          <div class="pos-cell sellc"><span>Sell target 2</span><b id="posT2">—</b></div>
+          <div class="pos-cell buyc"><span data-i18n="pos_add">Add / buy zone</span><b id="posAdd">—</b></div>
+          <div class="pos-cell sellc"><span data-i18n="pos_t1">Sell target 1</span><b id="posT1">—</b></div>
+          <div class="pos-cell stopc"><span data-i18n="pos_stop">Stop-loss</span><b id="posStop">—</b></div>
+          <div class="pos-cell sellc"><span data-i18n="pos_t2">Sell target 2</span><b id="posT2">—</b></div>
         </div>
-        <div class="kv"><span>Plan risk : reward</span><b id="posRR">—</b></div>
+        <div class="kv"><span data-i18n="pos_rr">Plan risk : reward</span><b id="posRR">—</b></div>
         <div class="hint" id="posNote" style="padding:6px 2px 0"></div>
       </div>
     </div>
 
 
     <div class="card">
-      <h3>Multi-timeframe confluence</h3>
+      <h3 data-i18n="card_mtf">Multi-timeframe confluence</h3>
       <div class="mtf" id="mtf"></div>
-      <div class="kv"><span>Agreement</span><b id="agree">—</b></div>
+      <div class="kv"><span data-i18n="mtf_agree">Agreement</span><b id="agree">—</b></div>
     </div>
 
     <div class="card">
-      <h3>Scanner · rank watchlist</h3>
-      <button class="btn alt" id="scanBtn">⚡ Scan watchlist on this TF</button>
+      <h3 data-i18n="card_scanner">Scanner · rank watchlist</h3>
+      <button class="btn alt" id="scanBtn" data-i18n="scan_btn">⚡ Scan watchlist on this TF</button>
       <div id="scanRows" class="scan"></div>
     </div>
 
     <div class="card">
-      <h3>Trade plan</h3>
-      <div class="kv"><span>Entry (last)</span><b id="entry">—</b></div>
-      <div class="kv"><span>Stop (swing)</span><b id="stop">—</b></div>
-      <div class="kv"><span>Target</span><b id="target">—</b></div>
-      <div class="kv"><span>Risk / reward</span><b id="rr">—</b></div>
-      <div class="kv"><span>Volatility (ATR)</span><b id="atrVal">—</b></div>
+      <h3 data-i18n="card_trade">Trade plan</h3>
+      <div class="kv"><span data-i18n="tp_entry">Entry (last)</span><b id="entry">—</b></div>
+      <div class="kv"><span data-i18n="tp_stop">Stop (swing)</span><b id="stop">—</b></div>
+      <div class="kv"><span data-i18n="tp_target">Target</span><b id="target">—</b></div>
+      <div class="kv"><span data-i18n="tp_rr">Risk / reward</span><b id="rr">—</b></div>
+      <div class="kv"><span data-i18n="tp_atr">Volatility (ATR)</span><b id="atrVal">—</b></div>
     </div>
 
     <div class="card">
-      <h3>Backtest</h3>
-      <button class="btn" id="btBtn">Run backtest on this TF</button>
+      <h3 data-i18n="card_backtest">Backtest</h3>
+      <button class="btn" id="btBtn" data-i18n="bt_btn">Run backtest on this TF</button>
       <div class="row2" id="btStats" style="margin-top:12px;display:none">
         <div class="stat"><div class="n" id="btTrades">—</div><div class="l">Trades</div></div>
         <div class="stat"><div class="n" id="btWin">—</div><div class="l">Win rate</div></div>
@@ -319,8 +339,8 @@
     </div>
 
     <div class="card">
-      <h3>Alerts</h3>
-      <button class="btn" id="alertBtn">🔔 Enable alerts</button>
+      <h3 data-i18n="card_alerts">Alerts</h3>
+      <button class="btn" id="alertBtn" data-i18n="alert_enable">🔔 Enable alerts</button>
       <div class="hint" id="alertState" style="padding:6px 0 10px">Off — in-app + browser notifications, checks every 60s while open.</div>
       <div class="alert-form">
         <select id="ruleType">
@@ -342,7 +362,7 @@
 
     <div class="card">
       <details>
-        <summary>⚙ Analysis settings</summary>
+        <summary data-i18n="card_settings">⚙ Analysis settings</summary>
         <div class="controls">
           <label>RSI length <span class="val" id="vRsi">14</span><input type="range" id="rsiLen" min="5" max="30" value="14"></label>
           <label>Fast EMA <span class="val" id="vEmaF">50</span><input type="range" id="emaF" min="10" max="100" value="50"></label>
@@ -355,7 +375,7 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
-<div class="fineprint" id="fineprint" title="Read the Terms &amp; Risk Disclaimer">⚠ Not financial advice · Terms</div>
+<div class="fineprint" id="fineprint" title="Read the Terms &amp; Risk Disclaimer" data-i18n="fineprint">⚠ Not financial advice · Terms</div>
 
 <div class="modal-overlay" id="faqModal">
   <div class="modal">
@@ -408,52 +428,32 @@
   </div>
 </div>
 
+<div class="gate langgate" id="langGate">
+  <div class="lang-box">
+    <h2>TV<span>Signals</span></h2>
+    <p>Choose your language &nbsp;·&nbsp; בחר/י שפה</p>
+    <div class="lang-opts">
+      <button id="langEn" class="lang-btn"><b>English</b><span>EN</span></button>
+      <button id="langHe" class="lang-btn"><b>עברית</b><span>HEB</span></button>
+    </div>
+  </div>
+</div>
+
 <div class="gate" id="termsGate">
   <div class="gate-box">
     <div class="gate-head">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
-        <h2>Terms of Use & Risk Disclaimer</h2>
+        <h2 data-i18n="terms_title">Terms of Use & Risk Disclaimer</h2>
         <button class="modal-x" id="termsCloseBtn" title="Close" style="display:none">✕</button>
       </div>
-      <p>Please read in full. You must scroll to the bottom and tick the box to continue.</p>
+      <p data-i18n="terms_sub">Please read in full. You must scroll to the bottom and tick the box to continue.</p>
     </div>
     <div class="gate-body" id="termsBody">
-      <p class="gate-warn">⚠ TVSignals is an educational tool — it is NOT financial advice and NOT a recommendation to buy or sell anything. Trading and investing can cause you to lose money, including all of it.</p>
-
-      <h4>1. No financial or investment advice</h4>
-      <p>TVSignals (the "App") is provided for <b>general informational and educational purposes only</b>. Nothing in the App constitutes financial, investment, trading, tax, accounting, or legal advice, and nothing should be relied upon as such. The App and its operators are <b>not</b> registered or licensed as a broker-dealer, investment adviser, financial planner, or in any similar capacity in any jurisdiction, and do not act as your fiduciary.</p>
-
-      <h4>2. No recommendation or solicitation</h4>
-      <p>All signals, scores, "buy"/"sell" labels, price targets, scanner rankings, and other outputs are generated <b>automatically by mechanical rules</b> applied to market data. They are <b>not</b> a recommendation, offer, solicitation, or endorsement to buy, sell, or hold any security, cryptocurrency, or other asset, and are <b>not personalized</b> to your circumstances, objectives, financial situation, or risk tolerance.</p>
-
-      <h4>3. Substantial risk of loss</h4>
-      <p>Trading and investing in stocks, crypto-assets, and other instruments involves <b>substantial risk, including the possible loss of your entire investment</b>. Prices are volatile and unpredictable. Technical indicators lag the market, produce false signals, and frequently fail in changing conditions. <b>Past performance and backtested or hypothetical results do not guarantee future results.</b> Only use capital you can afford to lose entirely.</p>
-
-      <h4>4. Data may be inaccurate or delayed</h4>
-      <p>Market data, charts, and other information are supplied by third parties (including, without limitation, Binance, Yahoo Finance, and TradingView) and are provided <b>"as is" and "as available."</b> They may be delayed, inaccurate, incomplete, or interrupted, and must be independently verified. The operators make no guarantee of accuracy, completeness, timeliness, or availability.</p>
-
-      <h4>5. Your sole responsibility</h4>
-      <p>You are <b>solely responsible</b> for your own financial decisions and any trades you place. You should consult a <b>licensed financial professional</b> before making any investment decision. You are responsible for determining and complying with all laws, regulations, and tax obligations that apply to you in your jurisdiction.</p>
-
-      <h4>6. No warranty</h4>
-      <p>The App is provided without warranties of any kind, whether express or implied, including but not limited to implied warranties of merchantability, fitness for a particular purpose, accuracy, title, and non-infringement.</p>
-
-      <h4>7. Limitation of liability</h4>
-      <p>To the maximum extent permitted by applicable law, the operators, owners, and contributors of the App shall <b>not be liable for any direct, indirect, incidental, consequential, special, punitive, or exemplary damages</b> — including, without limitation, any trading or investment losses, loss of profits, or loss of data — arising from or related to your access to or use of (or inability to use) the App, even if advised of the possibility of such damages.</p>
-
-      <h4>8. Indemnification</h4>
-      <p>You agree to indemnify, defend, and hold harmless the operators, owners, and contributors of the App from and against any claims, demands, losses, liabilities, damages, costs, and expenses (including reasonable legal fees) arising out of your use of the App or your breach of these Terms.</p>
-
-      <h4>9. Governing law and jurisdiction</h4>
-      <p>These Terms are governed by and construed in accordance with the laws of the <b>State of Israel</b>, without regard to its conflict-of-laws principles. Any dispute, claim, or controversy arising out of or relating to these Terms or to your use of the App shall be subject to the <b>exclusive jurisdiction of the competent courts of Tel Aviv-Jaffa, Israel</b>. The App is not directed at, and is not intended for use by, any person in any jurisdiction where such use would be contrary to law or regulation; if you access it from another jurisdiction, you do so on your own initiative and are responsible for compliance with all applicable local laws.</p>
-
-      <h4>10. Acceptance of these terms</h4>
-      <p>By ticking the box and selecting "I Agree &amp; Continue," you confirm that you are of legal age in your jurisdiction, that you have read, understood, and agree to these Terms of Use &amp; Risk Disclaimer, and that you use the App <b>entirely at your own risk</b>. If you do not agree, do not use the App.</p>
-      <p style="color:var(--muted);font-size:11px;margin-top:14px">— End of terms —</p>
+      <div id="termsContent"></div>
     </div>
     <div class="gate-foot" id="termsFoot">
-      <label class="gate-check"><input type="checkbox" id="termsCheck" disabled> I have read, understood, and agree to the Terms of Use &amp; Risk Disclaimer above.</label>
-      <button class="gate-agree" id="termsAgree" disabled>Scroll down to read all terms</button>
+      <label class="gate-check"><input type="checkbox" id="termsCheck" disabled> <span data-i18n="terms_agree_label">I have read, understood, and agree to the Terms of Use &amp; Risk Disclaimer above.</span></label>
+      <button class="gate-agree" id="termsAgree" disabled data-i18n="terms_scroll">Scroll down to read all terms</button>
     </div>
   </div>
 </div>
@@ -466,17 +466,24 @@
 ============================================================ */
 const POPULAR = {
   crypto:{
-    Majors:['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT'],
-    DeFi:['UNIUSDT','AAVEUSDT','LINKUSDT','MKRUSDT'],
-    Memes:['DOGEUSDT','PEPEUSDT','SHIBUSDT','WIFUSDT'],
+    'Majors':['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','ADAUSDT'],
+    'AI & compute':['FETUSDT','RENDERUSDT','TAOUSDT','GRTUSDT','NEARUSDT'],
+    'Layer 1s':['SOLUSDT','AVAXUSDT','ADAUSDT','DOTUSDT','APTUSDT','SUIUSDT'],
+    'DeFi':['UNIUSDT','AAVEUSDT','LINKUSDT','MKRUSDT'],
+    'Memes':['DOGEUSDT','PEPEUSDT','SHIBUSDT','WIFUSDT'],
   },
   stock:{
     'Mega-cap tech':['AAPL','MSFT','NVDA','GOOGL','META','AMZN','TSLA'],
-    Semis:['AMD','AVGO','TSM','INTC','MU','ARM'],
-    Finance:['JPM','BAC','GS','V','MA'],
-    ETFs:['SPY','QQQ','DIA','IWM','VTI'],
-    Consumer:['NFLX','DIS','KO','NKE','SBUX','MCD'],
-    'Energy / Industrial':['XOM','CVX','BA','CAT','GE'],
+    'Artificial intelligence':['NVDA','MSFT','GOOGL','META','AMD','PLTR','SMCI','AVGO','ARM'],
+    'Semiconductors':['NVDA','AMD','AVGO','TSM','INTC','MU','ARM','QCOM','ASML','TXN','LRCX','AMAT'],
+    'Quantum computing':['IONQ','RGTI','QBTS','QUBT','ARQQ','IBM'],
+    'Nuclear & uranium':['CCJ','SMR','OKLO','LEU','NNE','BWXT','CEG','VST','UUUU'],
+    'EV & autos':['TSLA','RIVN','LCID','NIO','F','GM'],
+    'Crypto & fintech':['COIN','MSTR','HOOD','MARA','RIOT','PYPL','SQ'],
+    'Finance':['JPM','BAC','GS','V','MA','BRK-B'],
+    'ETFs':['SPY','QQQ','DIA','IWM','VTI','SMH','ARKK'],
+    'Energy':['XOM','CVX','COP','SLB'],
+    'Consumer':['NFLX','DIS','KO','NKE','SBUX','MCD'],
   },
 };
 const DEFAULT_WL = {
@@ -975,8 +982,7 @@ function renderWatchlist(){
     el.innerHTML=`<span class="sym">${sym}</span>
       <span class="dot" id="dot-${sym}"></span>
       <span class="x" title="remove">✕</span>`;
-    el.querySelector('.sym').onclick=()=>selectSymbol(sym);
-    el.querySelector('.dot').onclick=()=>selectSymbol(sym);
+    el.onclick=()=>selectSymbol(sym);
     el.querySelector('.x').onclick=e=>{e.stopPropagation();
       state.watchlist=state.watchlist.filter(s=>s!==sym);saveWl();renderWatchlist();};
     wl.appendChild(el);
@@ -985,16 +991,25 @@ function renderWatchlist(){
 function saveWl(){state.wlStore[state.market]=state.watchlist;localStorage.setItem('tvs_wl2',JSON.stringify(state.wlStore));}
 function renderPopular(){
   const wrap=$('popular');wrap.innerHTML='';
-  for(const[name,syms]of Object.entries(POPULAR[state.market])){
+  const openState=JSON.parse(localStorage.getItem('tvs_secopen')||'{}');
+  Object.entries(POPULAR[state.market]).forEach(([name,syms],i)=>{
+    const key=state.market+':'+name;
+    const isOpen = key in openState ? openState[key] : (i<2);   // first two sections open by default
     const g=document.createElement('div');g.className='pop-group';
-    g.innerHTML=`<div class="pg-h">${name}</div>`;
-    const chips=document.createElement('div');chips.className='pop-chips';
-    syms.forEach(s=>{
-      const b=document.createElement('button');b.textContent=s;
-      b.onclick=()=>selectSymbol(s);chips.appendChild(b);
-    });
-    g.appendChild(chips);wrap.appendChild(g);
-  }
+    g.innerHTML=`<div class="pg-h${isOpen?' open':''}"><span class="pg-arrow">▸</span><span class="pg-name">${name}</span><span class="pg-count">${syms.length}</span></div>
+      <div class="pop-chips"${isOpen?'':' style="display:none"'}></div>`;
+    const chips=g.querySelector('.pop-chips');
+    syms.forEach(s=>{const b=document.createElement('button');b.textContent=s;b.onclick=()=>selectSymbol(s);chips.appendChild(b);});
+    const hdr=g.querySelector('.pg-h');
+    hdr.onclick=()=>{
+      const open=!hdr.classList.contains('open');
+      hdr.classList.toggle('open',open);
+      chips.style.display=open?'':'none';
+      const st=JSON.parse(localStorage.getItem('tvs_secopen')||'{}');
+      st[key]=open; localStorage.setItem('tvs_secopen',JSON.stringify(st));
+    };
+    wrap.appendChild(g);
+  });
 }
 
 function paintSignal(sig,mtf,conf){
@@ -1150,7 +1165,7 @@ async function checkAllAlerts(){
 let alertTimer=null;
 async function toggleAlerts(){
   state.alerts=!state.alerts;
-  $('alertBtn').textContent=state.alerts?'🔕 Disable alerts':'🔔 Enable alerts';
+  $('alertBtn').textContent=state.alerts?t('alert_disable'):t('alert_enable');
   $('alertState').textContent=state.alerts
     ?`On — ${state.alertRules.length} rule(s), checks every 60s while open.`
     :'Off — in-app + browser notifications, checks every 60s while open.';
@@ -1332,7 +1347,7 @@ $('btBtn').onclick=async()=>{
     $('btRR').textContent=r.avgRR.toFixed(2);
     drawEquity(r.equity);
   }catch(e){toast('Backtest failed: '+e.message);}
-  finally{$('btBtn').disabled=false;$('btBtn').textContent='Run backtest on this TF';}
+  finally{$('btBtn').disabled=false;$('btBtn').textContent=t('bt_btn');}
 };
 $('entryPrice').addEventListener('input',()=>{
   const v=parseFloat($('entryPrice').value);
@@ -1348,7 +1363,7 @@ $('scanBtn').onclick=async()=>{
   const btn=$('scanBtn');btn.disabled=true;btn.textContent='Scanning…';
   try{renderScan(await runScan());}
   catch(e){toast('Scan failed: '+(e.message||e));}
-  finally{btn.disabled=false;btn.textContent='⚡ Scan watchlist on this TF';}
+  finally{btn.disabled=false;btn.textContent=t('scan_btn');}
 };
 $('ruleType').onchange=()=>{
   $('ruleVal').style.display=NEEDS_VAL.includes($('ruleType').value)?'block':'none';
@@ -1371,36 +1386,124 @@ bind('emaS','emaS','vEmaS');bind('thr','thr','vThr');
 /* ============================================================
    BOOT
 ============================================================ */
-/* ---- first-visit Terms gate (scroll-to-read → tick → agree) ---- */
-(function termsGate(){
-  if(localStorage.getItem('tvs_terms_v1')) return;   // already accepted on this device
+/* ===================== internationalization (EN / HE) ===================== */
+const I18N={
+  en:{
+    terms_title:'Terms of Use & Risk Disclaimer',
+    terms_sub:'Please read in full. You must scroll to the bottom and tick the box to continue.',
+    terms_agree_label:'I have read, understood, and agree to the Terms of Use & Risk Disclaimer above.',
+    terms_scroll:'Scroll down to read all terms', terms_tick:'Tick the box to agree', terms_agree_btn:'I Agree & Continue',
+    faq_btn:'FAQ', mkt_crypto:'Crypto', mkt_stock:'Stock',
+    search_ph:'Search symbol or name — e.g. BTC, AAPL, apple…',
+    wl_title:'Watchlist', wl_add:'+ add', popular:'Popular',
+    side_hint:'Tap any symbol to load it. Or type one in the search bar — the chart also searches TradingView’s full universe.',
+    card_signal:'Signal', card_position:'My position · smart plan',
+    pos_bought:'I bought at', pos_cur:'Current price', pos_pl:'Unrealized P/L',
+    pos_add:'Add / buy zone', pos_t1:'Sell target 1', pos_stop:'Stop-loss', pos_t2:'Sell target 2', pos_rr:'Plan risk : reward',
+    pos_hint:'Enter your entry price to get smart buy/sell levels.',
+    card_mtf:'Multi-timeframe confluence', mtf_agree:'Agreement',
+    card_scanner:'Scanner · rank watchlist', scan_btn:'⚡ Scan watchlist on this TF',
+    card_trade:'Trade plan', tp_entry:'Entry (last)', tp_stop:'Stop (swing)', tp_target:'Target', tp_rr:'Risk / reward', tp_atr:'Volatility (ATR)',
+    card_backtest:'Backtest', bt_btn:'Run backtest on this TF',
+    card_alerts:'Alerts', alert_enable:'🔔 Enable alerts', alert_disable:'🔕 Disable alerts',
+    card_settings:'⚙ Analysis settings', fineprint:'⚠ Not financial advice · Terms',
+  },
+  he:{
+    terms_title:'תנאי שימוש וכתב סיכון',
+    terms_sub:'יש לקרוא את המסמך במלואו. עליך לגלול עד הסוף ולסמן את התיבה כדי להמשיך.',
+    terms_agree_label:'קראתי, הבנתי ואני מסכים/ה לתנאי השימוש וכתב הסיכון שלמעלה.',
+    terms_scroll:'גלול/י למטה לקריאת כל התנאים', terms_tick:'סמן/י את התיבה כדי לאשר', terms_agree_btn:'אני מסכים/ה וממשיך/ה',
+    faq_btn:'מדריך', mkt_crypto:'קריפטו', mkt_stock:'מניות',
+    search_ph:'חיפוש סימול או שם — לדוגמה BTC, AAPL, apple…',
+    wl_title:'רשימת מעקב', wl_add:'+ הוסף', popular:'פופולרי',
+    side_hint:'הקש/י על סימול כדי לטעון אותו, או הקלד/י בשורת החיפוש — הגרף מחפש גם ביקום המלא של TradingView.',
+    card_signal:'איתות', card_position:'הפוזיציה שלי · תוכנית חכמה',
+    pos_bought:'קניתי במחיר', pos_cur:'מחיר נוכחי', pos_pl:'רווח/הפסד לא ממומש',
+    pos_add:'אזור קנייה / הוספה', pos_t1:'יעד מכירה 1', pos_stop:'סטופ-לוס', pos_t2:'יעד מכירה 2', pos_rr:'סיכון : סיכוי',
+    pos_hint:'הזן/י את מחיר הקנייה שלך כדי לקבל רמות קנייה/מכירה חכמות.',
+    card_mtf:'התכנסות רב-טווחית', mtf_agree:'הסכמה',
+    card_scanner:'סורק · דירוג רשימת המעקב', scan_btn:'⚡ סרוק את רשימת המעקב',
+    card_trade:'תוכנית מסחר', tp_entry:'כניסה (אחרון)', tp_stop:'סטופ (שפל)', tp_target:'יעד', tp_rr:'סיכון / סיכוי', tp_atr:'תנודתיות (ATR)',
+    card_backtest:'בדיקה לאחור', bt_btn:'הרץ בדיקה לאחור',
+    card_alerts:'התראות', alert_enable:'🔔 הפעל התראות', alert_disable:'🔕 כבה התראות',
+    card_settings:'⚙ הגדרות ניתוח', fineprint:'⚠ אינו ייעוץ פיננסי · תנאים',
+  },
+};
+const TERMS_HTML={
+  en:`<p class="gate-warn">⚠ TVSignals is an educational tool — it is NOT financial advice and NOT a recommendation to buy or sell anything. Trading and investing can cause you to lose money, including all of it.</p>
+    <h4>1. No financial or investment advice</h4><p>TVSignals (the "App") is provided for <b>general informational and educational purposes only</b>. Nothing in the App constitutes financial, investment, trading, tax, accounting, or legal advice, and nothing should be relied upon as such. The App and its operators are <b>not</b> registered or licensed as a broker-dealer, investment adviser, or financial planner in any jurisdiction, and do not act as your fiduciary.</p>
+    <h4>2. No recommendation or solicitation</h4><p>All signals, scores, "buy"/"sell" labels, price targets, scanner rankings, and other outputs are generated <b>automatically by mechanical rules</b> applied to market data. They are <b>not</b> a recommendation, offer, solicitation, or endorsement to buy, sell, or hold any security, cryptocurrency, or other asset, and are <b>not personalized</b> to your circumstances, objectives, financial situation, or risk tolerance.</p>
+    <h4>3. Substantial risk of loss</h4><p>Trading and investing involves <b>substantial risk, including the possible loss of your entire investment</b>. Prices are volatile and unpredictable. Technical indicators lag the market, produce false signals, and frequently fail in changing conditions. <b>Past performance and backtested or hypothetical results do not guarantee future results.</b> Only use capital you can afford to lose entirely.</p>
+    <h4>4. Data may be inaccurate or delayed</h4><p>Market data, charts, and other information are supplied by third parties (including, without limitation, Binance, Yahoo Finance, and TradingView) and are provided <b>"as is" and "as available."</b> They may be delayed, inaccurate, incomplete, or interrupted, and must be independently verified. The operators make no guarantee of accuracy, completeness, timeliness, or availability.</p>
+    <h4>5. Your sole responsibility</h4><p>You are <b>solely responsible</b> for your own financial decisions and any trades you place. You should consult a <b>licensed financial professional</b> before making any investment decision. You are responsible for complying with all laws, regulations, and tax obligations that apply to you in your jurisdiction.</p>
+    <h4>6. No warranty</h4><p>The App is provided without warranties of any kind, whether express or implied, including but not limited to implied warranties of merchantability, fitness for a particular purpose, accuracy, title, and non-infringement.</p>
+    <h4>7. Limitation of liability</h4><p>To the maximum extent permitted by applicable law, the operators, owners, and contributors of the App shall <b>not be liable for any direct, indirect, incidental, consequential, special, punitive, or exemplary damages</b> — including any trading or investment losses, loss of profits, or loss of data — arising from or related to your use of (or inability to use) the App, even if advised of the possibility of such damages.</p>
+    <h4>8. Indemnification</h4><p>You agree to indemnify, defend, and hold harmless the operators, owners, and contributors of the App from any claims, demands, losses, liabilities, damages, costs, and expenses (including reasonable legal fees) arising out of your use of the App or your breach of these Terms.</p>
+    <h4>9. Governing law and jurisdiction</h4><p>These Terms are governed by and construed in accordance with the laws of the <b>State of Israel</b>, without regard to its conflict-of-laws principles. Any dispute arising out of or relating to these Terms or your use of the App shall be subject to the <b>exclusive jurisdiction of the competent courts of Tel Aviv-Jaffa, Israel</b>. The App is not directed at, and is not intended for use by, any person in any jurisdiction where such use would be contrary to law.</p>
+    <h4>10. Acceptance of these terms</h4><p>By ticking the box and selecting "I Agree & Continue," you confirm that you are of legal age in your jurisdiction, that you have read, understood, and agree to these Terms, and that you use the App <b>entirely at your own risk</b>. If you do not agree, do not use the App.</p>
+    <p style="color:var(--muted);font-size:11px;margin-top:14px">— End of terms —</p>`,
+  he:`<p class="gate-warn">⚠ ‏TVSignals הוא כלי חינוכי — הוא אינו ייעוץ פיננסי ואינו המלצה לקנות או למכור דבר. מסחר והשקעות עלולים לגרום לך להפסיד כסף, לרבות מלוא הסכום.</p>
+    <h4>1. אין ייעוץ פיננסי או השקעתי</h4><p>‏TVSignals ("האפליקציה") מסופקת למטרות מידע וחינוך כלליות בלבד. שום דבר באפליקציה אינו מהווה ייעוץ פיננסי, השקעתי, מסחרי, מיסויי, חשבונאי או משפטי, ואין להסתמך עליו ככזה. האפליקציה ומפעיליה <b>אינם</b> רשומים או מורשים כברוקר-דילר, יועץ השקעות או מתכנן פיננסי בשום תחום שיפוט, ואינם פועלים כנאמן שלך.</p>
+    <h4>2. אין המלצה או שידול</h4><p>כל האיתותים, הציונים, תוויות "קנייה"/"מכירה", יעדי המחיר, דירוגי הסורק ושאר הפלטים נוצרים <b>אוטומטית על ידי כללים מכניים</b> המיושמים על נתוני שוק. הם <b>אינם</b> המלצה, הצעה, שידול או אישור לקנות, למכור או להחזיק נייר ערך, מטבע קריפטו או נכס אחר, ו<b>אינם מותאמים אישית</b> לנסיבותיך, מטרותיך, מצבך הפיננסי או סובלנות הסיכון שלך.</p>
+    <h4>3. סיכון מהותי להפסד</h4><p>מסחר והשקעה כרוכים ב<b>סיכון מהותי, לרבות אובדן אפשרי של מלוא ההשקעה שלך</b>. המחירים תנודתיים ובלתי צפויים. אינדיקטורים טכניים מפגרים אחר השוק, מייצרים איתותי שווא וכושלים לעיתים קרובות בתנאים משתנים. <b>ביצועי עבר ותוצאות בדיקה לאחור או היפותטיות אינם מבטיחים תוצאות עתידיות.</b> השתמש/י רק בכסף שאת/ה יכול/ה להרשות לעצמך להפסיד במלואו.</p>
+    <h4>4. הנתונים עלולים להיות שגויים או מושהים</h4><p>נתוני שוק, גרפים ומידע אחר מסופקים על ידי צדדים שלישיים (לרבות, ללא הגבלה, ‏Binance,‏ Yahoo Finance ו‑TradingView) ומסופקים <b>"כפי שהם" ו"כפי שזמינים"</b>. הם עלולים להיות מושהים, שגויים, חלקיים או מופרעים, ויש לאמתם באופן עצמאי. המפעילים אינם מתחייבים לדיוק, שלמות, עדכניות או זמינות.</p>
+    <h4>5. אחריותך הבלעדית</h4><p>האחריות לכל החלטותיך הפיננסיות ולכל עסקה שתבצע/י מוטלת <b>עליך בלבד</b>. עליך להתייעץ עם <b>איש מקצוע פיננסי מורשה</b> לפני קבלת כל החלטת השקעה. באחריותך לעמוד בכל החוקים, התקנות וחובות המס החלים עליך בתחום השיפוט שלך.</p>
+    <h4>6. ללא אחריות</h4><p>האפליקציה מסופקת ללא אחריות מכל סוג, מפורשת או משתמעת, לרבות אך לא רק אחריות משתמעת לסחירות, התאמה למטרה מסוימת, דיוק, בעלות ואי‑הפרה.</p>
+    <h4>7. הגבלת אחריות</h4><p>במידה המרבית המותרת בחוק החל, מפעילי האפליקציה, בעליה ותורמיה <b>לא יישאו באחריות לכל נזק ישיר, עקיף, מקרי, תוצאתי, מיוחד, עונשי או לדוגמה</b> — לרבות הפסדי מסחר או השקעה, אובדן רווחים או אובדן נתונים — הנובעים מהשימוש שלך באפליקציה (או מאי‑היכולת להשתמש בה), גם אם הוזהרו מפני אפשרות של נזק כזה.</p>
+    <h4>8. שיפוי</h4><p>את/ה מסכים/ה לשפות, להגן ולפטור את מפעילי האפליקציה, בעליה ותורמיה מכל תביעה, דרישה, הפסד, התחייבות, נזק, עלות והוצאה (לרבות שכר טרחת עורך דין סביר) הנובעים מהשימוש שלך באפליקציה או מהפרת תנאים אלה.</p>
+    <h4>9. דין וסמכות שיפוט</h4><p>תנאים אלה כפופים לחוקי <b>מדינת ישראל</b> ויפורשו לפיהם, ללא התחשבות בכללי ברירת הדין שלה. כל מחלוקת הנובעת מתנאים אלה או מהשימוש שלך באפליקציה תהיה כפופה ל<b>סמכות השיפוט הבלעדית של בתי המשפט המוסמכים בתל אביב‑יפו, ישראל</b>. האפליקציה אינה מיועדת לשימוש על ידי אדם בכל תחום שיפוט שבו שימוש כזה מנוגד לחוק.</p>
+    <h4>10. קבלת התנאים</h4><p>על ידי סימון התיבה ובחירה ב"אני מסכים/ה וממשיך/ה", את/ה מאשר/ת שהינך בגיל חוקי בתחום השיפוט שלך, שקראת, הבנת ומסכים/ה לתנאים אלה, ושאת/ה משתמש/ת באפליקציה <b>על אחריותך המלאה</b>. אם אינך מסכים/ה, אל תשתמש/י באפליקציה.</p>
+    <p style="color:var(--muted);font-size:11px;margin-top:14px">— סוף התנאים —</p>`,
+};
+let LANG=localStorage.getItem('tvs_lang')||'en';
+function t(k){ return (I18N[LANG]&&I18N[LANG][k]) || I18N.en[k] || k; }
+function buildTerms(){ const c=$('termsContent'); if(c) c.innerHTML=TERMS_HTML[LANG]||TERMS_HTML.en; }
+function applyLang(lang){
+  LANG=lang; localStorage.setItem('tvs_lang',lang);
+  document.documentElement.lang=lang;
+  document.documentElement.dir = lang==='he' ? 'rtl' : 'ltr';
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ const v=t(el.getAttribute('data-i18n')); if(v!=null) el.textContent=v; });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{ const v=t(el.getAttribute('data-i18n-ph')); if(v!=null) el.placeholder=v; });
+  buildTerms();
+}
+/* ---- first-visit gate: language → Terms (scroll → tick → agree) ---- */
+let _gateBound=false;
+function showTermsGate(){
+  if(localStorage.getItem('tvs_terms_v1')) return;
   const gate=$('termsGate'), body=$('termsBody'), chk=$('termsCheck'), btn=$('termsAgree');
-  gate.classList.add('show');
+  $('termsFoot').style.display=''; $('termsCloseBtn').style.display='none';
+  chk.disabled=true; chk.checked=false; btn.disabled=true; btn.textContent=t('terms_scroll');
+  body.scrollTop=0; gate.classList.add('show');
+  if(_gateBound) return; _gateBound=true;
   let scrolled=false;
   const checkScroll=()=>{
     if(!scrolled && body.scrollTop+body.clientHeight>=body.scrollHeight-12){
       scrolled=true; chk.disabled=false;
-      if(!chk.checked) btn.textContent='Tick the box to agree';
+      if(!chk.checked) btn.textContent=t('terms_tick');
     }
   };
   body.addEventListener('scroll',checkScroll);
-  setTimeout(checkScroll,400);          // handle screens tall enough to show all terms at once
+  setTimeout(checkScroll,400);
   chk.addEventListener('change',()=>{
     const ok=scrolled && chk.checked;
-    btn.disabled=!ok;
-    btn.textContent=ok?'I Agree & Continue':'Tick the box to agree';
+    btn.disabled=!ok; btn.textContent=ok?t('terms_agree_btn'):t('terms_tick');
   });
   btn.addEventListener('click',()=>{
     if(btn.disabled) return;
-    localStorage.setItem('tvs_terms_v1','1');
-    gate.classList.remove('show');
+    localStorage.setItem('tvs_terms_v1','1'); gate.classList.remove('show');
   });
-})();
+}
+function startOnboarding(){
+  const saved=localStorage.getItem('tvs_lang');
+  if(saved){ applyLang(saved); showTermsGate(); }
+  else { applyLang('en'); $('langGate').classList.add('show'); }
+}
+$('langEn').onclick=()=>{ applyLang('en'); $('langGate').classList.remove('show'); showTermsGate(); };
+$('langHe').onclick=()=>{ applyLang('he'); $('langGate').classList.remove('show'); showTermsGate(); };
 /* reopen terms anytime via the persistent badge (review mode — no re-agreement) */
 $('fineprint').onclick=()=>{
-  $('termsBody').scrollTop=0;
-  $('termsCloseBtn').style.display='';
-  $('termsFoot').style.display='none';
+  buildTerms(); $('termsBody').scrollTop=0;
+  $('termsCloseBtn').style.display=''; $('termsFoot').style.display='none';
   $('termsGate').classList.add('show');
 };
 $('termsCloseBtn').onclick=()=>$('termsGate').classList.remove('show');
@@ -1413,6 +1516,7 @@ $('symInput').value=state.symbol;
 $('ruleSym').textContent=state.symbol;
 loadEntryInput();
 renderWatchlist();renderPopular();renderRules();
+startOnboarding();
 window.addEventListener('DOMContentLoaded',()=>{refreshActiveChart();analyze();});
 if(document.readyState!=='loading'){refreshActiveChart();analyze();}
 </script>
