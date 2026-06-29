@@ -163,6 +163,9 @@
   .faq-a ul{margin:6px 0;padding-left:18px}
   .faq-a li{margin:3px 0}
   .faq-disclaimer{margin-top:22px;padding:12px 14px;border-radius:9px;background:rgba(240,185,11,.08);border:1px solid rgba(240,185,11,.3);color:var(--hold);font-size:12.5px;line-height:1.55}
+  /* persistent disclaimer badge */
+  .fineprint{position:fixed;bottom:9px;right:12px;z-index:40;font-size:11px;font-weight:600;color:var(--muted);background:rgba(17,21,31,.8);border:1px solid var(--line);border-radius:7px;padding:5px 10px;cursor:pointer;backdrop-filter:blur(3px)}
+  .fineprint:hover{color:var(--hold);border-color:var(--hold)}
   /* terms gate */
   .gate{position:fixed;inset:0;background:rgba(5,7,11,.94);backdrop-filter:blur(5px);z-index:500;display:none;align-items:center;justify-content:center;padding:16px}
   .gate.show{display:flex}
@@ -347,6 +350,7 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="fineprint" id="fineprint" title="Read the Terms &amp; Risk Disclaimer">⚠ Not financial advice · Terms</div>
 
 <div class="modal-overlay" id="faqModal">
   <div class="modal">
@@ -402,7 +406,10 @@
 <div class="gate" id="termsGate">
   <div class="gate-box">
     <div class="gate-head">
-      <h2>Terms of Use & Risk Disclaimer</h2>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+        <h2>Terms of Use & Risk Disclaimer</h2>
+        <button class="modal-x" id="termsCloseBtn" title="Close" style="display:none">✕</button>
+      </div>
       <p>Please read in full. You must scroll to the bottom and tick the box to continue.</p>
     </div>
     <div class="gate-body" id="termsBody">
@@ -432,11 +439,14 @@
       <h4>8. Indemnification</h4>
       <p>You agree to indemnify, defend, and hold harmless the operators, owners, and contributors of the App from and against any claims, demands, losses, liabilities, damages, costs, and expenses (including reasonable legal fees) arising out of your use of the App or your breach of these Terms.</p>
 
-      <h4>9. Acceptance of these terms</h4>
+      <h4>9. Governing law and jurisdiction</h4>
+      <p>These Terms are governed by and construed in accordance with the laws of the <b>State of Israel</b>, without regard to its conflict-of-laws principles. Any dispute, claim, or controversy arising out of or relating to these Terms or to your use of the App shall be subject to the <b>exclusive jurisdiction of the competent courts of Tel Aviv-Jaffa, Israel</b>. The App is not directed at, and is not intended for use by, any person in any jurisdiction where such use would be contrary to law or regulation; if you access it from another jurisdiction, you do so on your own initiative and are responsible for compliance with all applicable local laws.</p>
+
+      <h4>10. Acceptance of these terms</h4>
       <p>By ticking the box and selecting "I Agree &amp; Continue," you confirm that you are of legal age in your jurisdiction, that you have read, understood, and agree to these Terms of Use &amp; Risk Disclaimer, and that you use the App <b>entirely at your own risk</b>. If you do not agree, do not use the App.</p>
       <p style="color:var(--muted);font-size:11px;margin-top:14px">— End of terms —</p>
     </div>
-    <div class="gate-foot">
+    <div class="gate-foot" id="termsFoot">
       <label class="gate-check"><input type="checkbox" id="termsCheck" disabled> I have read, understood, and agree to the Terms of Use &amp; Risk Disclaimer above.</label>
       <button class="gate-agree" id="termsAgree" disabled>Scroll down to read all terms</button>
     </div>
@@ -1379,6 +1389,18 @@ bind('emaS','emaS','vEmaS');bind('thr','thr','vThr');
     gate.classList.remove('show');
   });
 })();
+/* reopen terms anytime via the persistent badge (review mode — no re-agreement) */
+$('fineprint').onclick=()=>{
+  $('termsBody').scrollTop=0;
+  $('termsCloseBtn').style.display='';
+  $('termsFoot').style.display='none';
+  $('termsGate').classList.add('show');
+};
+$('termsCloseBtn').onclick=()=>$('termsGate').classList.remove('show');
+$('termsGate').addEventListener('click',e=>{
+  if(e.target===$('termsGate') && $('termsCloseBtn').style.display!=='none')
+    $('termsGate').classList.remove('show');
+});
 
 $('symInput').value=state.symbol;
 $('ruleSym').textContent=state.symbol;

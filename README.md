@@ -40,12 +40,12 @@ closed**, you need a small backend — see "Going further" below.
 - **Chart legend** → a floating key on the Signals chart explains every line: EMA 50
   (orange, short-term trend), EMA 200 (blue, long-term trend), last price (gray dashed),
   support/resistance (purple dashed), and the ▲ Buy / ▼ Sell reversal arrows.
-- **News & earnings** → a live headline feed for the selected symbol (Yahoo search
-  endpoint, keyless — works for stocks and crypto), each headline a clickable source
-  link. **Earnings dates** for stocks (next date, EPS estimate, and a "⚠ earnings
-  within a week — expect volatility" warning) light up when you paste a free
-  **Finnhub API key** in ⚙ Settings (Yahoo's earnings endpoint is now crumb-locked, so
-  this is the reliable keyless-by-default path; the key is stored only in your browser).
+- **First-visit Terms gate** → a full-screen Terms of Use & Risk Disclaimer that blocks
+  the app until the user scrolls through it and ticks an "I agree" box (acceptance saved
+  in localStorage so it only appears once per device).
+- **"How it works" FAQ** → a modal (FAQ button in the header) explaining data sources,
+  how BUY/SELL is decided, what the chart arrows/lines mean, how the position prices are
+  computed, privacy/data handling, and how to verify with backtesting.
 - **Search any symbol** → TradingView chart loads instantly (crypto or stock toggle).
 - **Symbol browser:** sidebar "Popular" groups (crypto: Majors/DeFi/Memes; stocks:
   Mega-cap tech / Semis / Finance / ETFs / Consumer / Energy) + a per-market
