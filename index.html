@@ -107,9 +107,19 @@
   .badge.t-sell{background:rgba(234,57,67,.15);color:var(--sell)}
   .badge.t-ssell{background:rgba(234,57,67,.26);color:#ff5d5d}
   .gauge{flex:1}
-  .gauge-bar{height:8px;border-radius:6px;background:linear-gradient(90deg,var(--sell),#3a4256 50%,var(--buy));position:relative;margin-top:6px}
-  .gauge-bar i{position:absolute;top:-3px;width:3px;height:14px;background:#fff;border-radius:2px;transition:left .3s}
   .score-num{font-size:13px;color:var(--muted)}
+  .score-num #tierName{color:var(--txt)}
+  .tier-bar{display:flex;gap:2px;margin-top:7px;align-items:center}
+  .tier-bar span{flex:1;height:8px;border-radius:2px;opacity:.25;transition:opacity .25s,height .25s}
+  .tier-bar span.act{opacity:1;height:14px;box-shadow:0 0 8px currentColor}
+  .tier-bar span[data-tier=t-ssell]{background:#b8303a;color:#b8303a}
+  .tier-bar span[data-tier=t-sell]{background:#ea3943;color:#ea3943}
+  .tier-bar span[data-tier=t-lsell]{background:#ef8a84;color:#ef8a84}
+  .tier-bar span[data-tier=t-neutral]{background:#f0b90b;color:#f0b90b}
+  .tier-bar span[data-tier=t-lbuy]{background:#6bd0a4;color:#6bd0a4}
+  .tier-bar span[data-tier=t-buy]{background:#16c784;color:#16c784}
+  .tier-bar span[data-tier=t-sbuy]{background:#26e6a0;color:#26e6a0}
+  .tier-ends{display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
   .reasons{list-style:none;margin:12px 0 0;padding:0}
   .reasons li{display:flex;gap:8px;padding:5px 0;font-size:13px;border-top:1px solid var(--line)}
   .reasons li .ic{flex:0 0 16px}
@@ -333,8 +343,17 @@
       <div class="verdict">
         <div class="badge HOLD" id="badge">…</div>
         <div class="gauge">
-          <div class="score-num">Score <b id="scoreNum">0</b> / 100</div>
-          <div class="gauge-bar"><i id="needle" style="left:50%"></i></div>
+          <div class="score-num">Score <b id="scoreNum">0</b> · <b id="tierName">—</b></div>
+          <div class="tier-bar" id="tierBar">
+            <span data-tier="t-ssell" title="Strong Sell"></span>
+            <span data-tier="t-sell" title="Sell"></span>
+            <span data-tier="t-lsell" title="Lean Sell"></span>
+            <span data-tier="t-neutral" title="Neutral"></span>
+            <span data-tier="t-lbuy" title="Lean Buy"></span>
+            <span data-tier="t-buy" title="Buy"></span>
+            <span data-tier="t-sbuy" title="Strong Buy"></span>
+          </div>
+          <div class="tier-ends"><span>Sell</span><span>Buy</span></div>
         </div>
       </div>
       <ul class="reasons" id="reasons"></ul>
@@ -1299,8 +1318,9 @@ function paintSignal(sig,mtf,conf){
   $('sigSym').textContent=state.symbol;
   const tier=signalTier(sig.score, state.cfg.thr);
   const badge=$('badge');badge.className='badge '+tier.cls;badge.textContent=tier.label;
-  $('scoreNum').textContent=sig.score;
-  $('needle').style.left=((sig.score+100)/200*100)+'%';
+  $('scoreNum').textContent=(sig.score>0?'+':'')+sig.score;
+  $('tierName').textContent=tier.label;
+  [...$('tierBar').children].forEach(s=>s.classList.toggle('act', s.dataset.tier===tier.cls));
   const ul=$('reasons');ul.innerHTML='';
   sig.reasons.forEach(([cls,txt])=>{
     const li=document.createElement('li');
