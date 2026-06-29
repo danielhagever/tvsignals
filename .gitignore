@@ -11,3 +11,7 @@ ios/App/Pods/
 ios/.xcode.env.local
 ios/App/build/
 build-sim/
+
+# native macOS app build artifacts
+mac/build-mac/
+mac/**/xcuserdata/
