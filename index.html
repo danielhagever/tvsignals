@@ -24,8 +24,10 @@
   /* ---- header ---- */
   header{
     grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:0 16px;
-    background:var(--panel);border-bottom:1px solid var(--line);
+    background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto;
   }
+  header::-webkit-scrollbar{height:0}
+  .logo,.seg,.tf-pills,.header-utils{flex-shrink:0}
   .logo{font-weight:700;letter-spacing:.5px;color:#fff;white-space:nowrap}
   .logo span{color:var(--accent)}
   .search{position:relative;flex:0 0 320px;max-width:40vw}
@@ -157,9 +159,14 @@
   .pop-chips{display:flex;flex-wrap:wrap;gap:5px;padding:3px 4px 9px}
   .pop-chips button{border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:12px;padding:5px 9px;border-radius:7px}
   .pop-chips button:hover{border-color:var(--accent);color:var(--accent)}
-  /* FAQ button + modal */
-  .faq-btn{background:var(--panel2);border:1px solid var(--line);color:var(--muted);font-size:12px;font-weight:700;padding:8px 12px;border-radius:8px;letter-spacing:.5px;white-space:nowrap}
-  .faq-btn:hover{color:var(--accent);border-color:var(--accent)}
+  /* header utilities (language + help) */
+  .header-utils{display:flex;align-items:center;gap:8px;margin-left:12px;flex-shrink:0}
+  .lang-toggle{display:flex;gap:2px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px}
+  .lang-toggle button{border:0;background:transparent;color:var(--muted);padding:5px 9px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer}
+  .lang-toggle button.on{background:var(--accent);color:#fff}
+  .icon-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);background:var(--panel2);color:var(--muted);border-radius:8px;font-size:16px;font-weight:700;cursor:pointer;flex-shrink:0}
+  .icon-btn:hover{color:var(--accent);border-color:var(--accent)}
+  /* FAQ modal */
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(3px);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
   .modal-overlay.open{display:flex}
   .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:680px;width:100%;max-height:86vh;display:flex;flex-direction:column;box-shadow:var(--shadow)}
@@ -225,7 +232,6 @@
 <div class="app">
   <header>
     <div class="logo">TV<span>Signals</span></div>
-    <button id="faqBtn" class="faq-btn" title="How it works" data-i18n="faq_btn">FAQ</button>
     <div class="seg" id="market">
       <button data-m="crypto" class="on" data-i18n="mkt_crypto">Crypto</button>
       <button data-m="stock" data-i18n="mkt_stock">Stock</button>
@@ -240,6 +246,13 @@
       <button data-tf="1h">1h</button>
       <button data-tf="4h" class="on">4h</button>
       <button data-tf="1d">1d</button>
+    </div>
+    <div class="header-utils">
+      <div class="lang-toggle" id="langToggle" title="Language / שפה">
+        <button data-lang="en">EN</button>
+        <button data-lang="he">עב</button>
+      </div>
+      <button id="faqBtn" class="icon-btn" title="How it works / מדריך">?</button>
     </div>
   </header>
 
@@ -1464,7 +1477,15 @@ function applyLang(lang){
   document.documentElement.dir = lang==='he' ? 'rtl' : 'ltr';
   document.querySelectorAll('[data-i18n]').forEach(el=>{ const v=t(el.getAttribute('data-i18n')); if(v!=null) el.textContent=v; });
   document.querySelectorAll('[data-i18n-ph]').forEach(el=>{ const v=t(el.getAttribute('data-i18n-ph')); if(v!=null) el.placeholder=v; });
+  const lt=$('langToggle'); if(lt)[...lt.children].forEach(c=>c.classList.toggle('on',c.dataset.lang===lang));
+  if($('alertBtn')) $('alertBtn').textContent = state.alerts ? t('alert_disable') : t('alert_enable');
   buildTerms();
+}
+function setupLangToggle(){
+  $('langToggle').addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b||b.dataset.lang===LANG) return;
+    applyLang(b.dataset.lang);
+  });
 }
 /* ---- first-visit gate: language → Terms (scroll → tick → agree) ---- */
 let _gateBound=false;
@@ -1516,6 +1537,7 @@ $('symInput').value=state.symbol;
 $('ruleSym').textContent=state.symbol;
 loadEntryInput();
 renderWatchlist();renderPopular();renderRules();
+setupLangToggle();
 startOnboarding();
 window.addEventListener('DOMContentLoaded',()=>{refreshActiveChart();analyze();});
 if(document.readyState!=='loading'){refreshActiveChart();analyze();}
