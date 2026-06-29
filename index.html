@@ -87,6 +87,10 @@
   .right{background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:14px}
   .card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
   .card h3{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}
+  .help-dot{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--line);color:var(--muted);font-size:10px;font-weight:700;cursor:pointer;margin-inline-start:7px;vertical-align:middle;text-transform:none;letter-spacing:normal;line-height:1;flex:none}
+  .help-dot:hover{color:var(--accent);border-color:var(--accent)}
+  #helpTip{position:fixed;z-index:300;max-width:280px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px 13px;font-size:12px;line-height:1.55;color:var(--txt);box-shadow:var(--shadow);display:none;font-weight:400;text-transform:none;letter-spacing:normal}
+  #helpTip.show{display:block}
   .verdict{display:flex;align-items:center;gap:12px}
   .badge{font-size:22px;font-weight:800;padding:8px 16px;border-radius:10px;letter-spacing:.5px}
   .badge.BUY{background:rgba(22,199,132,.15);color:var(--buy)}
@@ -311,7 +315,7 @@
 
   <div class="right">
     <div class="card">
-      <h3><span data-i18n="card_signal">Signal</span> · <span id="sigSym">—</span></h3>
+      <h3><span data-i18n="card_signal">Signal</span> · <span id="sigSym">—</span><span class="help-dot" data-help="signal">?</span></h3>
       <div class="verdict">
         <div class="badge HOLD" id="badge">…</div>
         <div class="gauge">
@@ -323,7 +327,7 @@
     </div>
 
     <div class="card">
-      <h3 data-i18n="card_position">My position · smart plan</h3>
+      <h3><span data-i18n="card_position">My position · smart plan</span><span class="help-dot" data-help="position">?</span></h3>
       <div class="pos-entry">
         <label data-i18n="pos_bought">I bought at</label>
         <input id="entryPrice" type="number" inputmode="decimal" step="any" placeholder="enter your buy price" />
@@ -346,19 +350,19 @@
 
 
     <div class="card">
-      <h3 data-i18n="card_mtf">Multi-timeframe confluence</h3>
+      <h3><span data-i18n="card_mtf">Multi-timeframe confluence</span><span class="help-dot" data-help="mtf">?</span></h3>
       <div class="mtf" id="mtf"></div>
       <div class="kv"><span data-i18n="mtf_agree">Agreement</span><b id="agree">—</b></div>
     </div>
 
     <div class="card">
-      <h3 data-i18n="card_scanner">Scanner · rank watchlist</h3>
+      <h3><span data-i18n="card_scanner">Scanner · rank watchlist</span><span class="help-dot" data-help="scanner">?</span></h3>
       <button class="btn alt" id="scanBtn" data-i18n="scan_btn">⚡ Scan watchlist on this TF</button>
       <div id="scanRows" class="scan"></div>
     </div>
 
     <div class="card">
-      <h3 data-i18n="card_trade">Trade plan</h3>
+      <h3><span data-i18n="card_trade">Trade plan</span><span class="help-dot" data-help="trade">?</span></h3>
       <div class="kv"><span data-i18n="tp_entry">Entry (last)</span><b id="entry">—</b></div>
       <div class="kv"><span data-i18n="tp_stop">Stop (swing)</span><b id="stop">—</b></div>
       <div class="kv"><span data-i18n="tp_target">Target</span><b id="target">—</b></div>
@@ -367,7 +371,7 @@
     </div>
 
     <div class="card">
-      <h3 data-i18n="card_backtest">Backtest</h3>
+      <h3><span data-i18n="card_backtest">Backtest</span><span class="help-dot" data-help="backtest">?</span></h3>
       <button class="btn" id="btBtn" data-i18n="bt_btn">Run backtest on this TF</button>
       <div class="row2" id="btStats" style="margin-top:12px;display:none">
         <div class="stat"><div class="n" id="btTrades">—</div><div class="l">Trades</div></div>
@@ -379,7 +383,7 @@
     </div>
 
     <div class="card">
-      <h3 data-i18n="card_alerts">Alerts</h3>
+      <h3><span data-i18n="card_alerts">Alerts</span><span class="help-dot" data-help="alerts">?</span></h3>
       <button class="btn" id="alertBtn" data-i18n="alert_enable">🔔 Enable alerts</button>
       <div class="hint" id="alertState" style="padding:6px 0 10px">Off — in-app + browser notifications, checks every 60s while open.</div>
       <div class="alert-form">
@@ -402,7 +406,7 @@
 
     <div class="card">
       <details>
-        <summary data-i18n="card_settings">⚙ Analysis settings</summary>
+        <summary><span data-i18n="card_settings">⚙ Analysis settings</span><span class="help-dot" data-help="settings">?</span></summary>
         <div class="controls">
           <label>RSI length <span class="val" id="vRsi">14</span><input type="range" id="rsiLen" min="5" max="30" value="14"></label>
           <label>Fast EMA <span class="val" id="vEmaF">50</span><input type="range" id="emaF" min="10" max="100" value="50"></label>
@@ -1565,6 +1569,51 @@ function setupLangToggle(){
     applyLang(b.dataset.lang);
   });
 }
+/* ---- contextual help "?" tooltips ---- */
+const HELP={
+  en:{
+    signal:'The overall read on this symbol right now: one score from −100 (strong sell) to +100 (strong buy), built from 8 indicators. Each line below is a reason that pushed the score up (▲) or down (▼).',
+    position:'Enter the price you bought at and it builds a risk-managed plan — sell targets, a stop-loss, an add/buy zone, and your live profit/loss — all derived from volatility (ATR) and real support/resistance.',
+    mtf:'Runs the same scoring on all five timeframes and blends them (higher timeframes count more). “Agreement” is how many timeframes point the same way — higher agreement means a stronger, more reliable signal.',
+    scanner:'Ranks every symbol in your watchlist by its signal score on the current timeframe, so you can spot the strongest setups at a glance. Click any row to open it.',
+    trade:'A ready-to-use plan if you bought right now: entry at the last price, an ATR-based stop-loss, a 2× risk target, and the resulting risk-to-reward ratio.',
+    backtest:'Replays the strategy over past data on this timeframe and reports win rate, total return and average risk:reward — a reality check before you trust a signal.',
+    alerts:'Get notified when conditions you set are met — a signal flip, or price / RSI / score crossing a level. Runs every 60s while the tab is open.',
+    settings:'Tune the engine: RSI length and the EMA pair change how momentum and trend are measured; the signal threshold sets how strong the score must be before it’s called BUY or SELL.',
+  },
+  he:{
+    signal:'הקריאה הכוללת על הסימול כרגע: ציון אחד מ‑100− (מכירה חזקה) עד 100+ (קנייה חזקה), המורכב מ‑8 אינדיקטורים. כל שורה למטה היא סיבה שדחפה את הציון מעלה (▲) או מטה (▼).',
+    position:'הזן/י את מחיר הקנייה שלך והמערכת בונה תוכנית מנוהלת‑סיכון — יעדי מכירה, סטופ‑לוס, אזור קנייה/הוספה, והרווח/הפסד החי שלך — הכול מתוך תנודתיות (ATR) ותמיכה/התנגדות אמיתית.',
+    mtf:'מריץ את אותו ניקוד על כל חמשת טווחי הזמן ומשקלל אותם (טווחים גבוהים שוקלים יותר). "הסכמה" היא כמה טווחים מצביעים לאותו כיוון — הסכמה גבוהה = איתות חזק ואמין יותר.',
+    scanner:'מדרג כל סימול ברשימת המעקב לפי ציון האיתות בטווח הנוכחי, כדי לזהות את ההזדמנויות החזקות במבט חטוף. לחיצה על שורה פותחת אותה.',
+    trade:'תוכנית מוכנה לשימוש אילו היית קונה כעת: כניסה במחיר האחרון, סטופ‑לוס מבוסס ATR, יעד של פי 2 מהסיכון, ויחס הסיכון/סיכוי הנובע מכך.',
+    backtest:'מריץ את האסטרטגיה על נתוני עבר בטווח זה ומדווח אחוז הצלחה, תשואה כוללת ויחס סיכון/סיכוי ממוצע — מבחן מציאות לפני שסומכים על איתות.',
+    alerts:'קבל/י התראה כשתנאים שהגדרת מתקיימים — היפוך איתות, או מחיר / RSI / ציון שחוצים רף. נבדק כל 60 שניות כל עוד הלשונית פתוחה.',
+    settings:'כוונון המנוע: אורך ה‑RSI וזוג ממוצעי ה‑EMA משנים כיצד נמדדים מומנטום ומגמה; סף האיתות קובע עד כמה הציון חייב להיות חזק כדי להיחשב קנייה או מכירה.',
+  },
+};
+function setupHelp(){
+  let tip=document.getElementById('helpTip');
+  if(!tip){ tip=document.createElement('div'); tip.id='helpTip'; document.body.appendChild(tip); }
+  let pinned=null;
+  const place=dot=>{
+    const key=dot.getAttribute('data-help');
+    tip.textContent=(HELP[LANG]&&HELP[LANG][key])||HELP.en[key]||'';
+    tip.classList.add('show');
+    const r=dot.getBoundingClientRect(), tw=tip.offsetWidth, th=tip.offsetHeight;
+    let left=Math.min(window.innerWidth-tw-8, Math.max(8, r.right-tw));
+    let top=r.bottom+8; if(top+th>window.innerHeight-8) top=Math.max(8, r.top-th-8);
+    tip.style.left=left+'px'; tip.style.top=top+'px';
+  };
+  const hide=()=>{ tip.classList.remove('show'); pinned=null; };
+  document.querySelectorAll('.help-dot').forEach(dot=>{
+    dot.addEventListener('mouseenter',()=>{ if(!pinned) place(dot); });
+    dot.addEventListener('mouseleave',()=>{ if(!pinned) tip.classList.remove('show'); });
+    dot.addEventListener('click',e=>{ e.stopPropagation(); e.preventDefault(); if(pinned===dot) hide(); else { pinned=dot; place(dot); } });
+  });
+  document.addEventListener('click',e=>{ if(pinned && !e.target.closest('#helpTip') && !e.target.closest('.help-dot')) hide(); });
+  window.addEventListener('scroll',()=>{ if(pinned) hide(); },true);
+}
 /* ---- first-visit gate: language → Terms (scroll → tick → agree) ---- */
 let _gateBound=false;
 function showTermsGate(){
@@ -1616,6 +1665,7 @@ $('ruleSym').textContent=state.symbol;
 loadEntryInput();
 renderWatchlist();renderPopular();renderRules();
 setupLangToggle();
+setupHelp();
 startOnboarding();
 window.addEventListener('DOMContentLoaded',()=>{refreshActiveChart();analyze();});
 if(document.readyState!=='loading'){refreshActiveChart();analyze();}
