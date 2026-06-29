@@ -132,7 +132,7 @@
   /* position planner */
   .pos-entry{display:flex;align-items:center;gap:10px;margin-bottom:4px}
   .pos-entry label{color:var(--muted);font-size:13px;white-space:nowrap}
-  .pos-entry input{flex:1;padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:14px;outline:none}
+  .pos-entry input{flex:1;min-width:0;width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:14px;outline:none}
   .pos-entry input:focus{border-color:var(--accent)}
   .pos-verdict{padding:9px 11px;border-radius:8px;background:var(--panel);font-size:13px;font-weight:600;margin:10px 0}
   .pos-verdict.pos{color:var(--buy)} .pos-verdict.neg{color:var(--sell)} .pos-verdict.neu{color:var(--txt)}
@@ -1018,9 +1018,9 @@ function drawSessionsOn(ctx,W,H){
   const getX=time=>{ const c=ts.timeToCoordinate(time); if(c!=null) return c; return time<=t0?0:(time>=t1?W:null); };
   const shade=(a,b,col)=>{ const xa=getX(a), xb=getX(b); if(xa==null||xb==null) return; const x=Math.min(xa,xb), w=Math.abs(xb-xa); if(w<=0) return; ctx.fillStyle=col; ctx.fillRect(x,0,w,H); };
   const vline=(time,col)=>{ const x=ts.timeToCoordinate(time); if(x==null) return; ctx.strokeStyle=col; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(Math.round(x)+.5,0); ctx.lineTo(Math.round(x)+.5,H); ctx.stroke(); };
-  (pre||[]).forEach(p=>shade(p.start,p.end,'rgba(96,135,255,.14)'));
-  (post||[]).forEach(p=>shade(p.start,p.end,'rgba(240,150,70,.14)'));
-  (regular||[]).forEach(p=>{ vline(p.start,'rgba(22,199,132,.45)'); vline(p.end,'rgba(234,57,67,.45)'); });
+  (pre||[]).forEach(p=>shade(p.start,p.end,'rgba(96,135,255,.20)'));
+  (post||[]).forEach(p=>shade(p.start,p.end,'rgba(240,150,70,.20)'));
+  (regular||[]).forEach(p=>{ vline(p.start,'rgba(22,199,132,.6)'); vline(p.end,'rgba(234,57,67,.6)'); });
   if(ls) ls.style.display='flex';
 }
 function drawPatternsOn(ctx,W,H){
@@ -1073,21 +1073,34 @@ function detectSwings(candles, lb=3){
   }
   return out;
 }
+function _r2(points){ // linear-fit R² (1 = perfect line)
+  const n=points.length; if(n<3) return 1;
+  const xs=points.map(p=>p.i), ys=points.map(p=>p.price);
+  const mx=xs.reduce((a,b)=>a+b)/n, my=ys.reduce((a,b)=>a+b)/n;
+  let sxy=0,sxx=0,syy=0;
+  for(let k=0;k<n;k++){ sxy+=(xs[k]-mx)*(ys[k]-my); sxx+=(xs[k]-mx)**2; syy+=(ys[k]-my)**2; }
+  if(sxx===0||syy===0) return 1;
+  const r=sxy/Math.sqrt(sxx*syy); return r*r;
+}
 function detectPatterns(candles){
   const pv=detectSwings(candles,3);
   if(pv.length<3) return [];
   const near=(a,b,tol)=>Math.abs(a-b)/((a+b)/2)<tol;
+  const conf=q=>Math.max(52,Math.min(94,Math.round(52+Math.max(0,Math.min(1,q))*42))); // quality 0-1 → 52-94%
   const n=candles.length, lastPx=candles[n-1].c, found=[];
-  const recent=idx=>idx>n-Math.min(120,n*0.7);   // pattern must be in the recent portion
+  const recent=idx=>idx>n-Math.min(120,n*0.7);
   // --- Double top / bottom (3 pivots) ---
   for(let j=pv.length-1;j>=2 && found.length===0;j--){
     const a=pv[j-2],b=pv[j-1],c=pv[j]; if(!recent(c.i)) break;
+    const d=Math.abs(a.price-c.price)/((a.price+c.price)/2);
     if(a.type==='H'&&b.type==='L'&&c.type==='H'&&near(a.price,c.price,0.03)&&b.price<Math.min(a.price,c.price)*0.985){
-      found.push({name:'Double Top',dir:'bear',lines:[[a,b,c],[{t:a.t,price:b.price},{t:c.t,price:b.price}]],
-        label:{t:b.t,price:Math.max(a.price,c.price),text:'Double Top'}});
+      const cf=conf(1-d/0.03);
+      found.push({name:'Double Top',dir:'bear',conf:cf,lines:[[a,b,c],[{t:a.t,price:b.price},{t:c.t,price:b.price}]],
+        label:{t:b.t,price:Math.max(a.price,c.price),text:`Double Top ${cf}%`}});
     } else if(a.type==='L'&&b.type==='H'&&c.type==='L'&&near(a.price,c.price,0.03)&&b.price>Math.max(a.price,c.price)*1.015){
-      found.push({name:'Double Bottom',dir:'bull',lines:[[a,b,c],[{t:a.t,price:b.price},{t:c.t,price:b.price}]],
-        label:{t:b.t,price:Math.min(a.price,c.price),text:'Double Bottom'}});
+      const cf=conf(1-d/0.03);
+      found.push({name:'Double Bottom',dir:'bull',conf:cf,lines:[[a,b,c],[{t:a.t,price:b.price},{t:c.t,price:b.price}]],
+        label:{t:b.t,price:Math.min(a.price,c.price),text:`Double Bottom ${cf}%`}});
     }
   }
   // --- Head & shoulders (5 pivots) ---
@@ -1096,14 +1109,18 @@ function detectPatterns(candles){
     const sig=p.map(x=>x.type).join('');
     if(sig==='HLHLH'){ const[ls,t1,hd,t2,rs]=p;
       if(hd.price>ls.price&&hd.price>rs.price&&near(ls.price,rs.price,0.045)&&near(t1.price,t2.price,0.05)){
-        found.push({name:'Head & Shoulders',dir:'bear',
+        const q=(1-Math.abs(ls.price-rs.price)/((ls.price+rs.price)/2)/0.045)*0.6+(1-Math.abs(t1.price-t2.price)/((t1.price+t2.price)/2)/0.05)*0.4;
+        const cf=conf(q);
+        found.push({name:'Head & Shoulders',dir:'bear',conf:cf,
           lines:[[ls,t1,hd,t2,rs],[{t:t1.t,price:(t1.price+t2.price)/2},{t:t2.t,price:(t1.price+t2.price)/2}]],
-          label:{t:hd.t,price:hd.price,text:'Head & Shoulders'}}); break; }
+          label:{t:hd.t,price:hd.price,text:`Head & Shoulders ${cf}%`}}); break; }
     } else if(sig==='LHLHL'){ const[ls,t1,hd,t2,rs]=p;
       if(hd.price<ls.price&&hd.price<rs.price&&near(ls.price,rs.price,0.045)&&near(t1.price,t2.price,0.05)){
-        found.push({name:'Inverse H&S',dir:'bull',
+        const q=(1-Math.abs(ls.price-rs.price)/((ls.price+rs.price)/2)/0.045)*0.6+(1-Math.abs(t1.price-t2.price)/((t1.price+t2.price)/2)/0.05)*0.4;
+        const cf=conf(q);
+        found.push({name:'Inverse H&S',dir:'bull',conf:cf,
           lines:[[ls,t1,hd,t2,rs],[{t:t1.t,price:(t1.price+t2.price)/2},{t:t2.t,price:(t1.price+t2.price)/2}]],
-          label:{t:hd.t,price:hd.price,text:'Inverse H&S'}}); break; }
+          label:{t:hd.t,price:hd.price,text:`Inverse H&S ${cf}%`}}); break; }
     }
   }
   // --- Triangles (fit recent highs & lows) ---
@@ -1116,8 +1133,10 @@ function detectPatterns(candles){
     if(flat(sh)&&sl>0) tri={name:'Ascending Triangle',dir:'bull'};
     else if(sh<0&&flat(sl)) tri={name:'Descending Triangle',dir:'bear'};
     else if(sh<0&&sl>0) tri={name:'Symmetrical Triangle',dir:'neutral'};
-    if(tri && recent(Math.max(highs[highs.length-1].i,lows[lows.length-1].i)))
-      found.push({...tri,dash:[5,4],lines:[lineH,lineL],label:{t:lineH[1].t,price:lineH[1].price,text:tri.name}});
+    if(tri && recent(Math.max(highs[highs.length-1].i,lows[lows.length-1].i))){
+      const cf=conf((_r2(highs)+_r2(lows))/2);
+      found.push({...tri,conf:cf,dash:[5,4],lines:[lineH,lineL],label:{t:lineH[1].t,price:lineH[1].price,text:`${tri.name} ${cf}%`}});
+    }
   }
   // --- Cup & handle ---
   for(let j=pv.length-1;j>=2 && !found.some(f=>f.name.startsWith('Cup'));j--){
@@ -1131,11 +1150,13 @@ function detectPatterns(candles){
       if(depth>0.06&&depth<0.5&&width>=10){
         let handle=null;
         if(j+1<pv.length&&pv[j+1].type==='L'){ const hl=pv[j+1]; if((rim2.price-hl.price)/rim2.price<depth*0.6) handle=hl; }
+        const rimDiff=Math.abs(rim1.price-rim2.price)/((rim1.price+rim2.price)/2);
+        const cf=conf((1-rimDiff/0.05)*0.7+(handle?0.3:0.12));
         const rim=(rim1.price+rim2.price)/2;
-        const pat={name:'Cup & Handle',dir:'bull',
+        const pat={name:'Cup & Handle',dir:'bull',conf:cf,
           curves:[{from:rim1,ctrl:{t:bottom.t,price:2*bottom.price-rim},to:rim2}],
           lines:[[{t:rim1.t,price:rim},{t:(handle||rim2).t,price:rim}]],
-          label:{t:bottom.t,price:rim,text:'Cup'+(handle?' & Handle':'')}};
+          label:{t:bottom.t,price:rim,text:(handle?'Cup & Handle':'Cup')+' '+cf+'%'}};
         if(handle) pat.lines.push([rim2,handle]);
         found.push(pat); break;
       }
@@ -1187,6 +1208,8 @@ async function loadSignalChart(){
     $('sigBanner').innerHTML=last
       ? `Latest trigger: <b style="color:${last.text==='BUY'?'var(--buy)':'var(--sell)'}">${last.text}</b> · ${markers.length} signals on ${state.tf}`
       : `No buy/sell triggers in this window · try another timeframe`;
+    if(state.market==='stock' && !intraday)
+      $('sigBanner').innerHTML += ` &nbsp;·&nbsp; <span style="color:var(--muted)">pre/after-market shows on 5m · 15m · 1h</span>`;
   }catch(e){
     $('sigBanner').textContent='⚠ '+e.message;
   }
