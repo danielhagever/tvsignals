@@ -207,7 +207,8 @@
   .sym-filters button.on{background:#fff;color:#0b0e14;border-color:#fff}
   .sym-results{overflow-y:auto;padding:6px 0;min-height:120px}
   .sym-row{display:flex;align-items:center;gap:12px;padding:11px 20px;cursor:pointer}
-  .sym-row:hover,.sym-row.active{background:var(--panel2)}
+  .sym-row:hover{background:rgba(255,255,255,.05)}
+  .sym-row.active{background:var(--panel2);box-shadow:inset 3px 0 0 var(--accent)}
   .sym-row .r-sym{font-weight:700;min-width:96px;color:#fff}
   .sym-row .r-name{color:var(--muted);font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sym-row .r-tag{font-size:11px;color:var(--muted);border:1px solid var(--line);padding:2px 8px;border-radius:5px;white-space:nowrap}
@@ -1362,12 +1363,11 @@ function smHighlight(){ [...$('smResults').querySelectorAll('.sym-row')].forEach
 function smPick(sym){ closeSearchModal(); selectSymbol(sym); }
 function smRender(res){
   const wrap=$('smResults');
-  if(!res.length){ wrap.innerHTML='<div class="sym-empty">'+t('search_none')+'</div>'; return; }
+  if(!res.length){ wrap.innerHTML='<div class="sym-empty">'+t('search_none')+'</div>'; smActive=-1; return; }
   wrap.innerHTML=res.map((r,i)=>`<div class="sym-row" data-i="${i}"><span class="r-sym">${r.symbol}</span><span class="r-name">${(r.name||'').replace(/</g,'&lt;')}</span><span class="r-tag">${r.exch||''}</span></div>`).join('');
-  [...wrap.querySelectorAll('.sym-row')].forEach(el=>{
-    el.onclick=()=>smPick(res[+el.dataset.i].symbol);
-    el.onmouseenter=()=>{ smActive=+el.dataset.i; smHighlight(); };
-  });
+  // click still selects a specific row; hover does NOT move the Enter target
+  [...wrap.querySelectorAll('.sym-row')].forEach(el=>{ el.onclick=()=>smPick(res[+el.dataset.i].symbol); });
+  smActive=0; smHighlight();   // first result is the Enter target by default
 }
 async function smDoSearch(){
   const q=$('smInput').value.trim();
@@ -1376,7 +1376,7 @@ async function smDoSearch(){
   try{
     const res=await searchSymbols(q);
     if(seq!==smSeq) return;
-    smResults=res; smActive=-1; smRender(res);
+    smResults=res; smRender(res);
   }catch(e){ $('smResults').innerHTML='<div class="sym-empty">'+t('search_unavail')+'</div>'; }
 }
 function setMarketForSearch(m){
@@ -1399,7 +1399,10 @@ function setMarketForSearch(m){
     const n=smResults.length;
     if(e.key==='ArrowDown'&&n){ e.preventDefault(); smActive=Math.min(smActive+1,n-1); smHighlight(); }
     else if(e.key==='ArrowUp'&&n){ e.preventDefault(); smActive=Math.max(smActive-1,0); smHighlight(); }
-    else if(e.key==='Enter'){ e.preventDefault(); if(smActive>=0&&smResults[smActive]) smPick(smResults[smActive].symbol); else if(inp.value.trim()) smPick(inp.value.trim()); }
+    else if(e.key==='Enter'){ e.preventDefault();
+      if(smActive>=0&&smResults[smActive]) smPick(smResults[smActive].symbol);
+      else if(smResults.length) smPick(smResults[0].symbol);
+      else if(inp.value.trim()) smPick(inp.value.trim()); }
     else if(e.key==='Escape'){ closeSearchModal(); }
   });
   $('searchModalClose').onclick=closeSearchModal;
