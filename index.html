@@ -80,6 +80,9 @@
   .chart-tabs{display:flex;align-items:center;gap:6px;padding:7px 12px;border-bottom:1px solid var(--line);background:var(--panel)}
   .chart-tabs button{border:1px solid var(--line);background:var(--panel2);color:var(--muted);padding:6px 13px;border-radius:7px;font-size:13px;font-weight:600}
   .chart-tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .pat-btn{margin-inline-start:8px}
+  .chart-tabs .pat-btn{background:var(--panel2);color:var(--muted);border:1px solid var(--line)}
+  .chart-tabs .pat-btn.on{background:rgba(138,125,255,.18);color:#b3a8ff;border-color:#8a7dff}
   .chart-tabs .legend{margin-left:14px;font-size:12px;color:var(--muted)}
   .lg-buy{color:var(--buy);font-style:normal} .lg-sell{color:var(--sell);font-style:normal}
   .sig-banner{margin-left:auto;font-size:12px;color:var(--txt)}
@@ -299,6 +302,7 @@
     <div class="chart-tabs">
       <button data-view="sig" class="on">📍 Signals</button>
       <button data-view="tv">TradingView</button>
+      <button id="patternToggle" class="pat-btn on" data-i18n="patterns">◈ Patterns</button>
       <span class="legend"><i class="lg-buy">▲</i> BUY entry &nbsp;&nbsp; <i class="lg-sell">▼</i> SELL exit &nbsp;·&nbsp; momentum reversals</span>
       <span id="sigBanner" class="sig-banner"></span>
     </div>
@@ -985,27 +989,30 @@ function buildSignalMarkers(candles,P){
   }
   return markers;
 }
-/* ---- pre / after-market session overlay (canvas synced to the time scale) ---- */
-let sessionCanvas=null, _sessionData=null;
-function ensureSessionCanvas(){
-  if(sessionCanvas) return;
+/* ---- chart overlays: pre/after-market sessions + chart patterns ---- */
+let overlayCanvas=null, _sessionData=null, _patterns=null;
+function ensureOverlayCanvas(){
+  if(overlayCanvas) return;
   const host=$('sig_chart'); if(!host) return;
   host.style.position='relative';
-  sessionCanvas=document.createElement('canvas');
-  sessionCanvas.style.cssText='position:absolute;inset:0;pointer-events:none;z-index:3';
-  host.appendChild(sessionCanvas);
-  try{ new ResizeObserver(()=>drawSessions()).observe(host); }catch(e){}
+  overlayCanvas=document.createElement('canvas');
+  overlayCanvas.style.cssText='position:absolute;inset:0;pointer-events:none;z-index:3';
+  host.appendChild(overlayCanvas);
+  try{ new ResizeObserver(()=>drawOverlays()).observe(host); }catch(e){}
 }
-function drawSessions(){
-  if(!sessionCanvas||!sigChart) return;
+function drawOverlays(){
+  if(!overlayCanvas||!sigChart) return;
   const host=$('sig_chart'), W=host.clientWidth, H=host.clientHeight, dpr=window.devicePixelRatio||1;
-  sessionCanvas.width=W*dpr; sessionCanvas.height=H*dpr;
-  sessionCanvas.style.width=W+'px'; sessionCanvas.style.height=H+'px';
-  const ctx=sessionCanvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+  overlayCanvas.width=W*dpr; overlayCanvas.height=H*dpr;
+  overlayCanvas.style.width=W+'px'; overlayCanvas.style.height=H+'px';
+  const ctx=overlayCanvas.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+  drawSessionsOn(ctx,W,H);
+  drawPatternsOn(ctx,W,H);
+}
+function drawSessionsOn(ctx,W,H){
   const ls=$('legendSessions');
-  if(!_sessionData){ if(ls) ls.style.display='none'; return; }
+  if(!_sessionData||!_sessionData.candles||!_sessionData.candles.length){ if(ls) ls.style.display='none'; return; }
   const {candles,pre,regular,post}=_sessionData;
-  if(!candles||!candles.length){ if(ls) ls.style.display='none'; return; }
   const ts=sigChart.timeScale();
   const t0=candles[0].t/1000, t1=candles[candles.length-1].t/1000;
   const getX=time=>{ const c=ts.timeToCoordinate(time); if(c!=null) return c; return time<=t0?0:(time>=t1?W:null); };
@@ -1015,6 +1022,126 @@ function drawSessions(){
   (post||[]).forEach(p=>shade(p.start,p.end,'rgba(240,150,70,.14)'));
   (regular||[]).forEach(p=>{ vline(p.start,'rgba(22,199,132,.45)'); vline(p.end,'rgba(234,57,67,.45)'); });
   if(ls) ls.style.display='flex';
+}
+function drawPatternsOn(ctx,W,H){
+  if(!state.showPatterns || !_patterns || !_patterns.length || !sigSeries) return;
+  const ts=sigChart.timeScale();
+  const X=t=>ts.timeToCoordinate(Math.floor(t/1000));
+  const Y=p=>sigSeries.priceToCoordinate(p);
+  const colOf=d=>d==='bull'?'#16c784':d==='bear'?'#ea3943':'#8a7dff';
+  _patterns.forEach(pat=>{
+    const col=colOf(pat.dir);
+    ctx.strokeStyle=col; ctx.lineWidth=1.8; ctx.setLineDash(pat.dash||[]);
+    (pat.lines||[]).forEach(line=>{
+      ctx.beginPath(); let started=false;
+      line.forEach(pt=>{ const x=X(pt.t), y=Y(pt.price); if(x==null||y==null) return; if(!started){ctx.moveTo(x,y);started=true;} else ctx.lineTo(x,y); });
+      if(started) ctx.stroke();
+    });
+    (pat.curves||[]).forEach(c=>{
+      const x0=X(c.from.t),y0=Y(c.from.price),xc=X(c.ctrl.t),yc=Y(c.ctrl.price),x1=X(c.to.t),y1=Y(c.to.price);
+      if([x0,y0,xc,yc,x1,y1].some(v=>v==null)) return;
+      ctx.beginPath(); ctx.moveTo(x0,y0); ctx.quadraticCurveTo(xc,yc,x1,y1); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    if(pat.label){ const x=X(pat.label.t), y=Y(pat.label.price);
+      if(x!=null&&y!=null){
+        ctx.font='600 11px -apple-system,BlinkMacSystemFont,sans-serif';
+        const tw=ctx.measureText(pat.label.text).width;
+        let bx=Math.min(W-tw-10,Math.max(4,x-tw/2)), by=Math.max(16,y-9);
+        ctx.fillStyle='rgba(11,14,20,.88)'; ctx.fillRect(bx-5,by-13,tw+10,18);
+        ctx.strokeStyle=col; ctx.lineWidth=1; ctx.strokeRect(bx-5,by-13,tw+10,18);
+        ctx.fillStyle=col; ctx.fillText(pat.label.text,bx,by);
+      }
+    }
+  });
+}
+/* ---- chart pattern detection (from swing pivots) ---- */
+function detectSwings(candles, lb=3){
+  let piv=[];
+  for(let i=lb;i<candles.length-lb;i++){
+    const w=candles.slice(i-lb,i+lb+1);
+    if(candles[i].h===Math.max(...w.map(x=>x.h))) piv.push({i,t:candles[i].t,price:candles[i].h,type:'H'});
+    if(candles[i].l===Math.min(...w.map(x=>x.l))) piv.push({i,t:candles[i].t,price:candles[i].l,type:'L'});
+  }
+  piv.sort((a,b)=>a.i-b.i || (a.type==='H'?-1:1));
+  const out=[];
+  for(const p of piv){
+    const last=out[out.length-1];
+    if(last&&last.type===p.type){
+      if((p.type==='H'&&p.price>=last.price)||(p.type==='L'&&p.price<=last.price)) out[out.length-1]=p;
+    } else out.push(p);
+  }
+  return out;
+}
+function detectPatterns(candles){
+  const pv=detectSwings(candles,3);
+  if(pv.length<3) return [];
+  const near=(a,b,tol)=>Math.abs(a-b)/((a+b)/2)<tol;
+  const n=candles.length, lastPx=candles[n-1].c, found=[];
+  const recent=idx=>idx>n-Math.min(120,n*0.7);   // pattern must be in the recent portion
+  // --- Double top / bottom (3 pivots) ---
+  for(let j=pv.length-1;j>=2 && found.length===0;j--){
+    const a=pv[j-2],b=pv[j-1],c=pv[j]; if(!recent(c.i)) break;
+    if(a.type==='H'&&b.type==='L'&&c.type==='H'&&near(a.price,c.price,0.03)&&b.price<Math.min(a.price,c.price)*0.985){
+      found.push({name:'Double Top',dir:'bear',lines:[[a,b,c],[{t:a.t,price:b.price},{t:c.t,price:b.price}]],
+        label:{t:b.t,price:Math.max(a.price,c.price),text:'Double Top'}});
+    } else if(a.type==='L'&&b.type==='H'&&c.type==='L'&&near(a.price,c.price,0.03)&&b.price>Math.max(a.price,c.price)*1.015){
+      found.push({name:'Double Bottom',dir:'bull',lines:[[a,b,c],[{t:a.t,price:b.price},{t:c.t,price:b.price}]],
+        label:{t:b.t,price:Math.min(a.price,c.price),text:'Double Bottom'}});
+    }
+  }
+  // --- Head & shoulders (5 pivots) ---
+  for(let j=pv.length-1;j>=4;j--){
+    const p=[pv[j-4],pv[j-3],pv[j-2],pv[j-1],pv[j]]; if(!recent(p[4].i)) break;
+    const sig=p.map(x=>x.type).join('');
+    if(sig==='HLHLH'){ const[ls,t1,hd,t2,rs]=p;
+      if(hd.price>ls.price&&hd.price>rs.price&&near(ls.price,rs.price,0.045)&&near(t1.price,t2.price,0.05)){
+        found.push({name:'Head & Shoulders',dir:'bear',
+          lines:[[ls,t1,hd,t2,rs],[{t:t1.t,price:(t1.price+t2.price)/2},{t:t2.t,price:(t1.price+t2.price)/2}]],
+          label:{t:hd.t,price:hd.price,text:'Head & Shoulders'}}); break; }
+    } else if(sig==='LHLHL'){ const[ls,t1,hd,t2,rs]=p;
+      if(hd.price<ls.price&&hd.price<rs.price&&near(ls.price,rs.price,0.045)&&near(t1.price,t2.price,0.05)){
+        found.push({name:'Inverse H&S',dir:'bull',
+          lines:[[ls,t1,hd,t2,rs],[{t:t1.t,price:(t1.price+t2.price)/2},{t:t2.t,price:(t1.price+t2.price)/2}]],
+          label:{t:hd.t,price:hd.price,text:'Inverse H&S'}}); break; }
+    }
+  }
+  // --- Triangles (fit recent highs & lows) ---
+  const highs=pv.filter(p=>p.type==='H').slice(-3), lows=pv.filter(p=>p.type==='L').slice(-3);
+  if(highs.length>=2&&lows.length>=2){
+    const slope=a=>(a[a.length-1].price-a[0].price)/((a[a.length-1].i-a[0].i)||1);
+    const sh=slope(highs), sl=slope(lows), flat=s=>Math.abs(s)/lastPx<0.0006;
+    const lineH=[highs[0],highs[highs.length-1]], lineL=[lows[0],lows[lows.length-1]];
+    let tri=null;
+    if(flat(sh)&&sl>0) tri={name:'Ascending Triangle',dir:'bull'};
+    else if(sh<0&&flat(sl)) tri={name:'Descending Triangle',dir:'bear'};
+    else if(sh<0&&sl>0) tri={name:'Symmetrical Triangle',dir:'neutral'};
+    if(tri && recent(Math.max(highs[highs.length-1].i,lows[lows.length-1].i)))
+      found.push({...tri,dash:[5,4],lines:[lineH,lineL],label:{t:lineH[1].t,price:lineH[1].price,text:tri.name}});
+  }
+  // --- Cup & handle ---
+  for(let j=pv.length-1;j>=2 && !found.some(f=>f.name.startsWith('Cup'));j--){
+    if(pv[j].type!=='H') continue; const rim2=pv[j]; if(!recent(rim2.i)) break;
+    for(let k=j-2;k>=0;k--){
+      if(pv[k].type!=='H') continue; const rim1=pv[k];
+      if(!near(rim1.price,rim2.price,0.05)) continue;
+      const between=pv.slice(k+1,j).filter(p=>p.type==='L'); if(!between.length) continue;
+      const bottom=between.reduce((m,p)=>p.price<m.price?p:m,between[0]);
+      const depth=(Math.min(rim1.price,rim2.price)-bottom.price)/rim1.price, width=rim2.i-rim1.i;
+      if(depth>0.06&&depth<0.5&&width>=10){
+        let handle=null;
+        if(j+1<pv.length&&pv[j+1].type==='L'){ const hl=pv[j+1]; if((rim2.price-hl.price)/rim2.price<depth*0.6) handle=hl; }
+        const rim=(rim1.price+rim2.price)/2;
+        const pat={name:'Cup & Handle',dir:'bull',
+          curves:[{from:rim1,ctrl:{t:bottom.t,price:2*bottom.price-rim},to:rim2}],
+          lines:[[{t:rim1.t,price:rim},{t:(handle||rim2).t,price:rim}]],
+          label:{t:bottom.t,price:rim,text:'Cup'+(handle?' & Handle':'')}};
+        if(handle) pat.lines.push([rim2,handle]);
+        found.push(pat); break;
+      }
+    }
+  }
+  return found.slice(0,2);
 }
 async function loadSignalChart(){
   const el=$('sig_chart');
@@ -1033,7 +1160,7 @@ async function loadSignalChart(){
         timeScale:{borderColor:'#222a3a',timeVisible:true,secondsVisible:false},
         crosshair:{mode:LightweightCharts.CrosshairMode.Normal},
       });
-      sigChart.timeScale().subscribeVisibleLogicalRangeChange(()=>drawSessions());
+      sigChart.timeScale().subscribeVisibleLogicalRangeChange(()=>drawOverlays());
       sigSeries=sigChart.addCandlestickSeries({upColor:'#16c784',downColor:'#ea3943',
         borderVisible:false,wickUpColor:'#16c784',wickDownColor:'#ea3943',
         priceLineColor:'#cbd5e1',priceLineStyle:LightweightCharts.LineStyle.Dashed});
@@ -1050,11 +1177,12 @@ async function loadSignalChart(){
     sigSR=pivotLevels(candles).slice(0,3).map(lv=>sigSeries.createPriceLine(
       {price:lv.price,color:'#8a7dff',lineStyle:2,lineWidth:1,axisLabelVisible:true,title:'S/R'}));
     sigChart.timeScale().fitContent();
-    // pre / after-market shading + session lines (stock intraday only)
-    ensureSessionCanvas();
+    // overlays: pre/after-market shading (stock intraday) + chart patterns
+    ensureOverlayCanvas();
     _sessionData = (usePre && candles.sessions && candles.sessions.regular.length)
       ? {candles, ...candles.sessions} : null;
-    drawSessions();
+    _patterns = detectPatterns(candles);
+    drawOverlays();
     const last=markers[markers.length-1];
     $('sigBanner').innerHTML=last
       ? `Latest trigger: <b style="color:${last.text==='BUY'?'var(--buy)':'var(--sell)'}">${last.text}</b> · ${markers.length} signals on ${state.tf}`
@@ -1389,9 +1517,20 @@ $('tfs').addEventListener('click',e=>{
   refreshActiveChart();analyze();
 });
 document.querySelector('.chart-tabs').addEventListener('click',e=>{
-  const b=e.target.closest('button');if(!b||b.dataset.view===state.chartView)return;
+  const b=e.target.closest('button[data-view]');if(!b||b.dataset.view===state.chartView)return;
   showView(b.dataset.view);
 });
+state.showPatterns = localStorage.getItem('tvs_patterns')!=='0';
+(function setupPatternToggle(){
+  const btn=$('patternToggle');
+  btn.classList.toggle('on',state.showPatterns);
+  btn.onclick=()=>{
+    state.showPatterns=!state.showPatterns;
+    localStorage.setItem('tvs_patterns',state.showPatterns?'1':'0');
+    btn.classList.toggle('on',state.showPatterns);
+    drawOverlays();
+  };
+})();
 /* ---- Symbol search modal (TradingView-style) ---- */
 // header symbol box is now a trigger that opens the modal (shows the current symbol)
 const symInput=$('symInput');
@@ -1547,6 +1686,7 @@ const I18N={
     card_alerts:'Alerts', alert_enable:'🔔 Enable alerts', alert_disable:'🔕 Disable alerts',
     card_settings:'⚙ Analysis settings', fineprint:'⚠ Not financial advice · Terms',
     search_title:'Symbol search', search_none:'No matches', search_unavail:'Search unavailable', search_hint:'Start typing to search · Esc to close',
+    patterns:'◈ Patterns',
   },
   he:{
     terms_title:'תנאי שימוש וכתב סיכון',
@@ -1568,6 +1708,7 @@ const I18N={
     card_alerts:'התראות', alert_enable:'🔔 הפעל התראות', alert_disable:'🔕 כבה התראות',
     card_settings:'⚙ הגדרות ניתוח', fineprint:'⚠ אינו ייעוץ פיננסי · תנאים',
     search_title:'חיפוש סימול', search_none:'אין תוצאות', search_unavail:'החיפוש אינו זמין', search_hint:'התחל/י להקליד כדי לחפש · Esc לסגירה',
+    patterns:'◈ תבניות',
   },
 };
 const TERMS_HTML={
