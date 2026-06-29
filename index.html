@@ -116,10 +116,6 @@
   /* news & earnings */
   .earnings{font-size:12.5px;padding:9px 11px;border-radius:8px;background:var(--panel);border:1px solid var(--line);margin-bottom:10px;line-height:1.5}
   .earnings.soon{border-color:var(--hold);color:var(--hold)}
-  .news-list a{display:block;padding:9px 0;border-top:1px solid var(--line);color:var(--txt);text-decoration:none;font-size:12.5px;line-height:1.4}
-  .news-list a:first-child{border-top:0}
-  .news-list a:hover{color:var(--accent)}
-  .news-list .meta{color:var(--muted);font-size:11px;margin-top:3px}
   .key-input{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font-size:12px;margin-top:4px}
   .key-input:focus{outline:none;border-color:var(--accent)}
   /* position planner */
@@ -156,6 +152,22 @@
   .pop-chips{display:flex;flex-wrap:wrap;gap:5px}
   .pop-chips button{border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:12px;padding:5px 9px;border-radius:7px}
   .pop-chips button:hover{border-color:var(--accent);color:var(--accent)}
+  /* FAQ button + modal */
+  .faq-btn{background:var(--panel2);border:1px solid var(--line);color:var(--muted);font-size:12px;font-weight:700;padding:8px 12px;border-radius:8px;letter-spacing:.5px;white-space:nowrap}
+  .faq-btn:hover{color:var(--accent);border-color:var(--accent)}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(3px);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;max-width:680px;width:100%;max-height:86vh;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line)}
+  .modal-head h2{margin:0;font-size:18px;color:#fff}
+  .modal-x{background:var(--panel2);border:1px solid var(--line);color:var(--txt);width:32px;height:32px;border-radius:8px;font-size:15px;cursor:pointer}
+  .modal-body{padding:8px 20px 22px;overflow:auto}
+  .faq-q{font-weight:700;color:#fff;margin:18px 0 6px;font-size:14px}
+  .faq-a{color:var(--txt);font-size:13px;line-height:1.6}
+  .faq-a b{color:#fff}
+  .faq-a ul{margin:6px 0;padding-left:18px}
+  .faq-a li{margin:3px 0}
+  .faq-disclaimer{margin-top:22px;padding:12px 14px;border-radius:9px;background:rgba(240,185,11,.08);border:1px solid rgba(240,185,11,.3);color:var(--hold);font-size:12.5px;line-height:1.55}
   .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);box-shadow:var(--shadow);padding:12px 18px;border-radius:10px;z-index:99;display:none;max-width:80vw}
   .err{color:var(--sell);font-size:12px;padding:6px 2px}
   details summary{cursor:pointer;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:8px}
@@ -172,6 +184,7 @@
 <div class="app">
   <header>
     <div class="logo">TV<span>Signals</span></div>
+    <button id="faqBtn" class="faq-btn" title="How it works">FAQ</button>
     <div class="seg" id="market">
       <button data-m="crypto" class="on">Crypto</button>
       <button data-m="stock">Stock</button>
@@ -251,9 +264,8 @@
     </div>
 
     <div class="card">
-      <h3>News & earnings · <span id="newsSym">—</span></h3>
+      <h3>Earnings · <span id="earnSym">—</span></h3>
       <div id="earningsBox" class="earnings">—</div>
-      <div id="newsList" class="news-list"><div class="hint">Loading…</div></div>
     </div>
 
     <div class="card">
@@ -330,6 +342,57 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="faqModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>How TVSignals works</h2>
+      <button class="modal-x" id="faqClose" title="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="faq-a" style="margin-top:10px">TVSignals charts any stock or crypto and turns classic technical analysis into clear buy/sell signals. It's fast, private, and runs entirely in your browser — no account, no server.</p>
+
+      <div class="faq-q">Where does the data come from?</div>
+      <div class="faq-a">
+        <ul>
+          <li><b>Crypto prices</b> — Binance's public API, live, on every timeframe.</li>
+          <li><b>Stock prices</b> — Yahoo Finance (routed through a public proxy so the browser can read it).</li>
+          <li><b>Charts</b> — TradingView's free widget + the lightweight-charts library.</li>
+          <li><b>Earnings</b> — Finnhub (needs your own free key, added in ⚙ Settings).</li>
+        </ul>
+        Everything is fetched live and the analysis is computed on your device.
+      </div>
+
+      <div class="faq-q">How does it decide BUY or SELL?</div>
+      <div class="faq-a">
+        It runs <b>8 indicators</b> and scores the result from <b>−100 (strong sell) to +100 (strong buy)</b>:
+        <ul>
+          <li><b>Trend</b> — EMA 50 vs EMA 200</li>
+          <li><b>Trend strength</b> — ADX / DMI</li>
+          <li><b>Momentum</b> — RSI and Stochastic</li>
+          <li><b>MACD</b> — bullish / bearish crosses</li>
+          <li><b>Volatility</b> — Bollinger Bands</li>
+          <li><b>Volume</b> — OBV confirmation</li>
+        </ul>
+        Score ≥ your threshold → <b style="color:var(--buy)">BUY</b>, ≤ −threshold → <b style="color:var(--sell)">SELL</b>, otherwise <b style="color:var(--hold)">HOLD</b>. Every signal lists the exact reasons behind it. It then blends all five timeframes (weighting the higher ones more) into one confluence read.
+      </div>
+
+      <div class="faq-q">What do the ▲ / ▼ arrows on the chart mean?</div>
+      <div class="faq-a">They mark <b>momentum reversals</b> — a MACD cross, RSI leaving oversold/overbought, a bounce off a Bollinger band, or a Stochastic turn. They alternate buy → sell so each entry has a matching exit, flagging timing points even against the larger trend.</div>
+
+      <div class="faq-q">How are the buy/sell prices in “My position” worked out?</div>
+      <div class="faq-a">From the price you enter: the <b>stop-loss</b> is 1.5× the average volatility (ATR) below your entry, snapped just under the nearest support; the <b>sell targets</b> are the next resistance levels above the current price (about 1.5× and 2.5× your risk); the <b>add/buy zone</b> is the nearest support below price. Every level is derived from real volatility and support/resistance — never fixed percentages.</div>
+
+      <div class="faq-q">Is my data private? How is it handled?</div>
+      <div class="faq-a">There's no account and no backend. Your watchlist, entry prices, alert rules, and Finnhub key are stored only in <b>your browser</b> (localStorage) and never leave your device. The only outbound requests are to the public price APIs listed above to fetch quotes — nothing about you is uploaded or saved on any server.</div>
+
+      <div class="faq-q">Can I check whether the signals actually work?</div>
+      <div class="faq-a">Yes — press <b>Backtest</b> to replay the strategy over historical data and see the win rate, total return, and risk:reward. If it loses on the past, treat that as a warning rather than a green light.</div>
+
+      <div class="faq-disclaimer">⚠ <b>Not financial advice.</b> TVSignals is an educational, rule-based tool. Technical signals lag, whipsaw in choppy markets, and know nothing about news, earnings, or fundamentals. Always do your own research and manage your risk — your trades are your responsibility.</div>
+    </div>
+  </div>
+</div>
 
 <script src="https://s3.tradingview.com/tv.js"></script>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
@@ -947,7 +1010,7 @@ function selectSymbol(sym){
   if(!state.watchlist.includes(state.symbol)){state.watchlist.unshift(state.symbol);saveWl();}
   $('ruleSym').textContent=state.symbol;
   loadEntryInput();
-  renderWatchlist();refreshActiveChart();analyze();loadNewsEarnings();
+  renderWatchlist();refreshActiveChart();analyze();loadEarnings();
 }
 
 /* ============================================================
@@ -1089,19 +1152,7 @@ function renderPosition(){
   state.entries[state.symbol]=entry; saveEntries();
 }
 
-/* ---- news & earnings ---- */
-function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-function timeAgo(t){if(!t)return'';const s=(Date.now()-t)/1000;
-  if(s<3600)return Math.max(1,Math.round(s/60))+'m ago';
-  if(s<86400)return Math.round(s/3600)+'h ago';
-  return Math.round(s/86400)+'d ago';}
-async function fetchNews(symbol,market){
-  let q=symbol;
-  if(market==='crypto') q=(symbol.replace(/(USDT|USDC|BUSD|BTC|ETH)$/,'')||symbol)+' crypto';
-  const j=await proxiedJSON(`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&newsCount=8&quotesCount=0`);
-  return (j.news||[]).filter(n=>/^https?:\/\//.test(n.link||''))
-    .map(n=>({title:n.title,publisher:n.publisher,link:n.link,time:(n.providerPublishTime||0)*1000}));
-}
+/* ---- earnings ---- */
 async function fetchEarnings(symbol){
   if(!state.finnhub) return {needKey:true};
   const f=d=>d.toISOString().slice(0,10);
@@ -1114,40 +1165,27 @@ async function fetchEarnings(symbol){
     .sort((a,b)=>a.date.localeCompare(b.date));
   return {next:up[0]||null};
 }
-let newsSeq=0;
-async function loadNewsEarnings(){
-  const sym=state.symbol, market=state.market, seq=++newsSeq;
-  $('newsSym').textContent=sym;
-  const eb=$('earningsBox'), nl=$('newsList');
-  // --- earnings (stocks only) ---
+let earnSeq=0;
+async function loadEarnings(){
+  const sym=state.symbol, market=state.market, seq=++earnSeq;
+  $('earnSym').textContent=sym;
+  const eb=$('earningsBox');
   state.earningsSoon=false;
-  if(market==='stock'){
-    eb.className='earnings'; eb.textContent='📅 Checking earnings…';
-    try{
-      const e=await fetchEarnings(sym);
-      if(seq!==newsSeq)return;
-      if(e.needKey){ eb.className='earnings'; eb.innerHTML='📅 Add a free <b>Finnhub</b> key in ⚙ Settings to show earnings dates.'; }
-      else if(e.next){
-        const days=Math.round((new Date(e.next.date+'T00:00:00')-Date.now())/864e5);
-        const soon=days>=0&&days<=7; state.earningsSoon=soon;
-        eb.className='earnings'+(soon?' soon':'');
-        eb.innerHTML=`📅 Next earnings: <b>${e.next.date}</b> ${days<0?'(reported)':'(in '+days+' day'+(days===1?'':'s')+')'}`
-          +(e.next.epsEstimate!=null?` · EPS est ${e.next.epsEstimate}`:'')
-          +(soon?'<br>⚠ Earnings within a week — expect volatility; signals are less reliable.':'');
-      } else { eb.className='earnings'; eb.textContent='📅 No upcoming earnings date found.'; }
-    }catch(err){ if(seq!==newsSeq)return; eb.className='earnings'; eb.textContent='📅 Earnings unavailable ('+err.message+').'; }
-  } else {
-    eb.className='earnings'; eb.textContent='📅 Earnings — not applicable to crypto.';
-  }
-  // --- news (stocks + crypto) ---
-  nl.innerHTML='<div class="hint">Loading news…</div>';
+  if(market!=='stock'){ eb.className='earnings'; eb.textContent='📅 Earnings — not applicable to crypto.'; return; }
+  eb.className='earnings'; eb.textContent='📅 Checking earnings…';
   try{
-    const news=await fetchNews(sym,market);
-    if(seq!==newsSeq)return;
-    nl.innerHTML=news.length
-      ? news.map(n=>`<a href="${esc(n.link)}" target="_blank" rel="noopener noreferrer">${esc(n.title)}<div class="meta">${esc(n.publisher||'')} · ${timeAgo(n.time)}</div></a>`).join('')
-      : '<div class="hint">No recent news found.</div>';
-  }catch(e){ if(seq!==newsSeq)return; nl.innerHTML='<div class="hint">News unavailable right now.</div>'; }
+    const e=await fetchEarnings(sym);
+    if(seq!==earnSeq)return;
+    if(e.needKey){ eb.className='earnings'; eb.innerHTML='📅 Add a free <b>Finnhub</b> key in ⚙ Settings to show earnings dates.'; }
+    else if(e.next){
+      const days=Math.round((new Date(e.next.date+'T00:00:00')-Date.now())/864e5);
+      const soon=days>=0&&days<=7; state.earningsSoon=soon;
+      eb.className='earnings'+(soon?' soon':'');
+      eb.innerHTML=`📅 Next earnings: <b>${e.next.date}</b> ${days<0?'(reported)':'(in '+days+' day'+(days===1?'':'s')+')'}`
+        +(e.next.epsEstimate!=null?` · EPS est ${e.next.epsEstimate}`:'')
+        +(soon?'<br>⚠ Earnings within a week — expect volatility; signals are less reliable.':'');
+    } else { eb.className='earnings'; eb.textContent='📅 No upcoming earnings date found.'; }
+  }catch(err){ if(seq!==earnSeq)return; eb.className='earnings'; eb.textContent='📅 Earnings unavailable ('+err.message+').'; }
 }
 
 /* scanner */
@@ -1188,7 +1226,7 @@ $('market').addEventListener('click',e=>{
   state.symbol=state.watchlist[0]||(state.market==='crypto'?'BTCUSDT':'AAPL');
   $('symInput').value=state.symbol;$('ruleSym').textContent=state.symbol;
   loadEntryInput();
-  renderWatchlist();renderPopular();refreshActiveChart();analyze();loadNewsEarnings();
+  renderWatchlist();renderPopular();refreshActiveChart();analyze();loadEarnings();
 });
 $('tfs').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
@@ -1272,6 +1310,10 @@ $('entryPrice').addEventListener('input',()=>{
   if(!v||v<=0){delete state.entries[state.symbol];saveEntries();$('posBody').style.display='none';$('posHint').style.display='block';}
   else renderPosition();
 });
+$('faqBtn').onclick=()=>$('faqModal').classList.add('open');
+$('faqClose').onclick=()=>$('faqModal').classList.remove('open');
+$('faqModal').addEventListener('click',e=>{ if(e.target===$('faqModal')) $('faqModal').classList.remove('open'); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') $('faqModal').classList.remove('open'); });
 $('alertBtn').onclick=toggleAlerts;
 $('scanBtn').onclick=async()=>{
   const btn=$('scanBtn');btn.disabled=true;btn.textContent='Scanning…';
@@ -1300,7 +1342,7 @@ $('finnhubKey').value=state.finnhub;
 $('finnhubKey').addEventListener('change',()=>{
   state.finnhub=$('finnhubKey').value.trim();
   localStorage.setItem('tvs_finnhub',state.finnhub);
-  loadNewsEarnings();
+  loadEarnings();
 });
 
 /* ============================================================
@@ -1310,8 +1352,8 @@ $('symInput').value=state.symbol;
 $('ruleSym').textContent=state.symbol;
 loadEntryInput();
 renderWatchlist();renderPopular();renderRules();
-window.addEventListener('DOMContentLoaded',()=>{refreshActiveChart();analyze();loadNewsEarnings();});
-if(document.readyState!=='loading'){refreshActiveChart();analyze();loadNewsEarnings();}
+window.addEventListener('DOMContentLoaded',()=>{refreshActiveChart();analyze();loadEarnings();});
+if(document.readyState!=='loading'){refreshActiveChart();analyze();loadEarnings();}
 </script>
 </body>
 </html>
