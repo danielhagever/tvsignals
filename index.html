@@ -296,7 +296,7 @@
       <button data-tf="5m">5m</button>
       <button data-tf="15m">15m</button>
       <button data-tf="1h">1h</button>
-      <button data-tf="4h" class="on">4h</button>
+      <button data-tf="4h">4h</button>
       <button data-tf="1d">1d</button>
     </div>
     <div class="header-utils">
@@ -577,9 +577,9 @@ const POPULAR = {
 };
 const DEFAULT_WL = ['BTCUSDT','ETHUSDT','SOLUSDT','AAPL','NVDA','TSLA','SPY','HOOD'];
 const state = {
-  symbol: 'BTCUSDT',
+  symbol: localStorage.getItem('tvs_lastsym') || 'BTCUSDT',
   market: 'crypto',
-  tf: '4h',
+  tf: localStorage.getItem('tvs_lasttf') || '1d',     // default 1D; remembered after that
   chartView: 'sig',
   cfg: { rsiLen:14, emaF:50, emaS:200, thr:40 },
   watchlist: JSON.parse(localStorage.getItem('tvs_wl3')||'null') || DEFAULT_WL.slice(),
@@ -1318,13 +1318,17 @@ function renderPopular(){
 
 function paintSignal(sig,mtf,conf){
   $('sigSym').textContent=state.symbol;
-  const tier=signalTier(sig.score, state.cfg.thr);
+  state.lastConf=conf;
+  // headline verdict = multi-timeframe blend → it does NOT change with the chart timeframe
+  const tier=signalTier(conf.score, state.cfg.thr);
   const badge=$('badge');badge.className='badge '+tier.cls;badge.textContent=tier.label;
-  $('scoreNum').textContent=(sig.score>0?'+':'')+sig.score;
+  $('scoreNum').textContent=(conf.score>0?'+':'')+conf.score;
   $('tierName').textContent=tier.label;
   [...$('tierBar').children].forEach(s=>s.classList.toggle('act', s.dataset.tier===tier.cls));
+  // reasons from the daily read (stable reference), fall back to current timeframe
+  const reasonsSig=(mtf.find(x=>x.tf==='1d')||{}).signal || sig;
   const ul=$('reasons');ul.innerHTML='';
-  sig.reasons.forEach(([cls,txt])=>{
+  reasonsSig.reasons.forEach(([cls,txt])=>{
     const li=document.createElement('li');
     const mark=cls==='pos'?'▲':cls==='neg'?'▼':'•';
     li.innerHTML=`<span class="ic ${cls}">${mark}</span><span>${txt}</span>`;
@@ -1349,10 +1353,10 @@ function paintSignal(sig,mtf,conf){
     chip.textContent=`${tf} ${signal.score>0?'+':''}${signal.score}`;
     m.appendChild(chip);
   });
-  $('agree').textContent=`${Math.round(conf.agreement*100)}% · ${conf.action} ${conf.score>0?'+':''}${conf.score}`;
-  // dot in watchlist
+  $('agree').textContent=`${Math.round(conf.agreement*100)}% agree · ${signalTier(conf.score,state.cfg.thr).label}`;
+  // dot in watchlist (uses the stable confluence)
   const dot=$('dot-'+state.symbol);
-  if(dot)dot.style.background=sig.action==='BUY'?'var(--buy)':sig.action==='SELL'?'var(--sell)':'var(--muted)';
+  if(dot)dot.style.background=conf.score>=state.cfg.thr?'var(--buy)':conf.score<=-state.cfg.thr?'var(--sell)':conf.score>=12?'#6bd0a4':conf.score<=-12?'#ef8a84':'var(--muted)';
   // position planner
   state.lastSig=sig;
   renderPosition();
@@ -1382,7 +1386,7 @@ async function analyze(){
     const conf=confluence(mtf);
     paintSignal(sig,mtf,conf);
     const i=candles.length-1;
-    applyAlerts(state.symbol,{price:sig.price,rsi:P.r[i],score:sig.score,action:sig.action});
+    applyAlerts(state.symbol,{price:sig.price,rsi:P.r[i],score:conf.score,action:conf.action});
   }catch(e){
     $('dataErr').textContent='⚠ '+e.message+(state.market==='stock'?' — stock data routes through a public CORS proxy; it can be slow or rate-limited. Retry or switch TF.':'');
     $('badge').textContent='—';$('badge').className='badge HOLD';
@@ -1392,6 +1396,7 @@ async function analyze(){
 function selectSymbol(sym){
   state.symbol=sym.toUpperCase();
   state.market=marketOf(state.symbol);          // auto crypto/stock from the symbol itself
+  localStorage.setItem('tvs_lastsym',state.symbol);   // remember across reloads
   if(!state.watchlist.includes(state.symbol)){state.watchlist.unshift(state.symbol);saveWl();}
   $('ruleSym').textContent=state.symbol;
   $('symInput').value=state.symbol;
@@ -1509,7 +1514,7 @@ function positionPlan(entry,price,atr,candles){
 function positionVerdict(plan,price,entry,sig){
   if(price<=plan.stop) return ['neg','⚠ At/below stop-loss — exit to limit the loss'];
   const up=plan.pl>=0;
-  if(up&&sig.action==='SELL')
+  if(up && state.lastConf && state.lastConf.action==='SELL')
     return ['pos',`Up ${(plan.pl*100).toFixed(1)}% & engine flipped SELL — consider taking profit toward ${fmt(plan.t1)}`];
   if(up)
     return ['neu',`Holding · up ${(plan.pl*100).toFixed(1)}% · next sell ${fmt(plan.t1)}`];
@@ -1536,7 +1541,8 @@ function renderPosition(){
   $('posT2').innerHTML=cell(plan.t2,(plan.t2-entry)/entry);
   $('posStop').innerHTML=cell(plan.stop,(plan.stop-entry)/entry);
   $('posRR').textContent='1 : '+plan.rr.toFixed(1);
-  $('posNote').textContent=`Stop = 1.5×ATR below entry, snapped under support; targets at 1.5R / 2.5R into resistance. Live engine reads ${signalTier(sig.score,state.cfg.thr).label} (score ${sig.score}).`;
+  const cscore=state.lastConf?state.lastConf.score:sig.score;
+  $('posNote').textContent=`Stop = 1.5×ATR below entry, snapped under support; targets at 1.5R / 2.5R into resistance. Overall signal: ${signalTier(cscore,state.cfg.thr).label} (${cscore>0?'+':''}${cscore}).`;
   state.entries[state.symbol]=entry; saveEntries();
 }
 
@@ -1574,6 +1580,7 @@ function renderScan(rows){
 $('tfs').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   state.tf=b.dataset.tf;
+  localStorage.setItem('tvs_lasttf',state.tf);   // remember the chosen timeframe
   [...$('tfs').children].forEach(c=>c.classList.toggle('on',c===b));
   refreshActiveChart();analyze();startLive();
 });
@@ -1934,6 +1941,7 @@ $('termsGate').addEventListener('click',e=>{
 
 $('symInput').value=state.symbol;
 $('ruleSym').textContent=state.symbol;
+[...$('tfs').children].forEach(b=>b.classList.toggle('on',b.dataset.tf===state.tf));  // restore saved timeframe
 loadEntryInput();
 renderWatchlist();renderPopular();renderRules();
 setupLangToggle();
