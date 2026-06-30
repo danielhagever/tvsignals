@@ -74,6 +74,22 @@
   .wl-item .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
   .wl-item .x{color:var(--muted);opacity:0;margin-left:2px}
   .wl-item:hover .x{opacity:1}
+  .wl-item .grip{color:var(--muted);opacity:0;cursor:grab;font-size:13px;line-height:1;margin:-1px -3px 0 -4px;user-select:none}
+  .wl-item:hover .grip{opacity:.55}
+  .wl-item.dragging{opacity:.35}
+  .wl-item.dragover{box-shadow:inset 0 2px 0 0 var(--accent)}
+  .wl-item.dragover-bottom{box-shadow:inset 0 -2px 0 0 var(--accent)}
+  /* signal confidence / trust block */
+  .trust{margin:10px 0 2px}
+  .conf-row{display:flex;align-items:center;gap:8px;font-size:12px}
+  .conf-row .conf-label{color:var(--muted);min-width:62px}
+  .conf-bar{flex:1;height:7px;border-radius:4px;background:var(--panel2);overflow:hidden}
+  .conf-fill{height:100%;width:0;border-radius:4px;transition:width .35s,background .35s}
+  .conf-row b{font-variant-numeric:tabular-nums;min-width:36px;text-align:right}
+  .trust-line{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.45}
+  .trust-line .good{color:var(--buy)}
+  .trust-line .warn{color:#f0b90b}
+  .trust-line .bad{color:var(--sell)}
   .hint{color:var(--muted);font-size:12px;padding:8px 4px}
   /* ---- chart ---- */
   main{position:relative;background:#0d1018;display:flex;flex-direction:column;min-width:0}
@@ -358,6 +374,14 @@
           </div>
           <div class="tier-ends"><span>Sell</span><span>Buy</span></div>
         </div>
+      </div>
+      <div class="trust" id="trustBlock">
+        <div class="conf-row">
+          <span class="conf-label">Confidence</span>
+          <div class="conf-bar"><div class="conf-fill" id="confFill"></div></div>
+          <b id="confPct">—</b>
+        </div>
+        <div class="trust-line" id="trustLine"></div>
       </div>
       <ul class="reasons" id="reasons"></ul>
     </div>
@@ -883,6 +907,32 @@ function precompute(candles,cfg){
     ob, obSma:sma(ob,20),
   };
 }
+// Local lows/highs in a series within [i-lb, i] — needs 2 confirming bars on each
+// side, so a pivot at k requires k+2<=i: fully causal (no lookahead → backtest-safe).
+function localPivots(vals,i,lb){
+  const lo=[],hi=[]; const a=Math.max(2,i-lb);
+  for(let k=a;k<=i-2;k++){
+    if(vals[k]==null) continue;
+    if(vals[k]<=vals[k-1]&&vals[k]<vals[k-2]&&vals[k]<=vals[k+1]&&vals[k]<vals[k+2]) lo.push(k);
+    if(vals[k]>=vals[k-1]&&vals[k]>vals[k-2]&&vals[k]>=vals[k+1]&&vals[k]>vals[k+2]) hi.push(k);
+  }
+  return {lo,hi};
+}
+// RSI/price divergence: a respected reversal tell. Bullish = price lower-low while
+// RSI makes a higher-low (selling exhausting); bearish = the mirror.
+function rsiDivergence(P,i,lb=45){
+  const {close,r}=P; if(r[i]==null) return null;
+  const {lo,hi}=localPivots(close,i,lb);
+  if(lo.length>=2){
+    const b=lo[lo.length-1], a=lo[lo.length-2];
+    if(r[a]!=null&&r[b]!=null&&close[b]<close[a]&&r[b]>r[a]+2&&r[a]<48) return 'bull';
+  }
+  if(hi.length>=2){
+    const b=hi[hi.length-1], a=hi[hi.length-2];
+    if(r[a]!=null&&r[b]!=null&&close[b]>close[a]&&r[b]<r[a]-2&&r[a]>52) return 'bear';
+  }
+  return null;
+}
 function signalAt(P,i,cfg){
   if(i<1) return null;
   const reasons=[];let score=0;
@@ -931,6 +981,11 @@ function signalAt(P,i,cfg){
     else{score-=8;reasons.push(['neg','Volume not confirming (OBV falling)']);}
   }
 
+  // --- RSI / price divergence (reversal tell) ---
+  const div=rsiDivergence(P,i);
+  if(div==='bull'){score+=15;reasons.push(['pos','Bullish RSI divergence']);}
+  else if(div==='bear'){score-=15;reasons.push(['neg','Bearish RSI divergence']);}
+
   score=Math.max(-100,Math.min(100,score));
   const action=score>=cfg.thr?'BUY':score<=-cfg.thr?'SELL':'HOLD';
   return {action,score,reasons,price:close[i],idx:i,atr:atr[i]??null};
@@ -954,10 +1009,21 @@ async function multiTimeframe(symbol,market,cfg){
       const c=await fetchCandles(symbol,market,tf,300);
       const P=precompute(c,cfg);
       const s=signalAt(P,c.length-1,cfg);
-      return {tf,signal:s};
+      return {tf,signal:s,candles:c};      // keep candles so the track record can backtest every TF
     })
   );
   return results.filter(r=>r.status==='fulfilled'&&r.value.signal).map(r=>r.value);
+}
+// Pool the backtest across ALL timeframes (data already fetched for confluence) so the
+// "track record" has a meaningful sample instead of the handful a single TF produces.
+function aggregateBacktest(mtf,cfg){
+  let trades=0,wins=0,rsum=0;
+  mtf.forEach(({candles})=>{
+    if(!candles) return;
+    const b=backtest(candles,cfg);
+    trades+=b.trades; wins+=Math.round(b.winRate*b.trades); rsum+=b.avgRR*b.trades;
+  });
+  return {trades, winRate:trades?wins/trades:0, avgRR:trades?rsum/trades:0};
 }
 function confluence(items){
   if(!items.length) return {action:'HOLD',score:0,agreement:0};
@@ -970,6 +1036,41 @@ function confluence(items){
   return {action,score:norm,agreement};
 }
 
+// Confidence / trust model — answers "how much should I trust this call?" by blending
+// signal strength + cross-timeframe agreement + the strategy's OWN historical hit-rate
+// on this symbol (auto-backtest), and discounting setups that fight the daily trend or
+// have thin/poor history. Deliberately shows LOW confidence when evidence is weak.
+function buildTrust(conf, bt, mtf){
+  const daily=(mtf.find(x=>x.tf==='1d')||{}).signal;
+  const dir=Math.sign(conf.score);
+  const counter = dir!==0 && daily && Math.sign(daily.score)===-dir && Math.abs(daily.score)>=22;
+  const strength=Math.min(1,Math.abs(conf.score)/70);
+  const n=bt.trades, wr=bt.winRate, exp=bt.avgRR;        // expectancy = R won/lost per trade
+  // edge from historical EXPECTANCY (the honest measure — a 35% win rate can still profit at 2R),
+  // only counted once there are a few trades; otherwise neutral.
+  const evid = Math.max(-0.20, Math.min(0.25, (n>=4?exp:0)*0.20));
+  let c = 0.50*strength + 0.30*conf.agreement + evid;
+  if(counter) c*=0.75;                                   // fighting the higher-TF trend → trust less
+  const pct=Math.round(Math.max(4,Math.min(96, c*100)));
+
+  const bits=[];
+  const agreePct=Math.round(conf.agreement*100);
+  if(conf.agreement>=0.8) bits.push(`<span class="good">${agreePct}% of timeframes agree</span>`);
+  else if(conf.agreement<=0.6) bits.push(`<span class="warn">timeframes split (${agreePct}%)</span>`);
+  else bits.push(`${agreePct}% of timeframes agree`);
+  if(n>=4){
+    const cls=exp>=0.15?'good':exp<=-0.05?'bad':'';
+    const verb=exp>=0.05?'net profitable':exp<=-0.05?'net losing':'roughly breakeven';
+    bits.push(`historically <span class="${cls}">${verb}</span> here · ${exp>=0?'+':''}${exp.toFixed(1)}R/trade over ${n} backtested trades (${Math.round(wr*100)}% win)`);
+  } else if(n>0){
+    bits.push(`only ${n} backtested trade${n>1?'s':''} here — thin history`);
+  } else {
+    bits.push(`no completed backtest trades`);
+  }
+  if(counter) bits.push(`<span class="warn">⚠ against the daily trend</span>`);
+  return {pct, text:bits.join(' · ')};
+}
+
 /* ============================================================
    BACKTESTER — long/flat, signal-driven, with stop & target
 ============================================================ */
@@ -979,25 +1080,30 @@ function backtest(candles,cfg){
   for(let i=1;i<candles.length;i++){
     const s=signalAt(P,i,cfg);const px=candles[i].c;
     if(!s){equity.push(cash);continue;}
-    if(!pos&&s.action==='BUY'){
-      const a=P.atr[i];
+    const a=P.atr[i];
+    if(!pos&&s.action==='BUY'){            // go long
       const swingLow=Math.min(...candles.slice(Math.max(0,i-10),i+1).map(c=>c.l));
       const stop=a?Math.max(swingLow,px-1.5*a):swingLow;
-      const risk=px-stop;
-      pos={entry:px,stop,target:px+risk*2,qty:cash/px};
+      const risk=Math.max(px-stop,px*0.001);
+      pos={dir:1,entry:px,stop,target:px+risk*2,qty:cash/px};
+    } else if(!pos&&s.action==='SELL'){    // go short (so SELL calls have a track record too)
+      const swingHigh=Math.max(...candles.slice(Math.max(0,i-10),i+1).map(c=>c.h));
+      const stop=a?Math.min(swingHigh,px+1.5*a):swingHigh;
+      const risk=Math.max(stop-px,px*0.001);
+      pos={dir:-1,entry:px,stop,target:px-risk*2,qty:cash/px};
     } else if(pos){
-      const exit = candles[i].l<=pos.stop ? pos.stop
-                 : candles[i].h>=pos.target ? pos.target
-                 : s.action==='SELL' ? px : null;
+      const exit = pos.dir>0
+        ? (candles[i].l<=pos.stop ? pos.stop : candles[i].h>=pos.target ? pos.target : s.action==='SELL' ? px : null)
+        : (candles[i].h>=pos.stop ? pos.stop : candles[i].l<=pos.target ? pos.target : s.action==='BUY'  ? px : null);
       if(exit!==null){
-        const pnl=(exit-pos.entry)*pos.qty;
+        const pnl=(exit-pos.entry)*pos.qty*pos.dir;
         cash+=pnl;
-        trades.push({ret:(exit-pos.entry)/pos.entry, win:pnl>0,
-                     r:(exit-pos.entry)/(pos.entry-pos.stop||1)});
+        trades.push({ret:(exit-pos.entry)/pos.entry*pos.dir, win:pnl>0,
+                     r:(exit-pos.entry)*pos.dir/Math.abs(pos.entry-pos.stop||1)});
         pos=null;
       }
     }
-    equity.push(pos?cash+(px-pos.entry)*pos.qty:cash);
+    equity.push(pos?cash+(px-pos.entry)*pos.qty*pos.dir:cash);
   }
   const wins=trades.filter(t=>t.win).length;
   const avgR=trades.length?trades.reduce((a,t)=>a+t.r,0)/trades.length:0;
@@ -1325,22 +1431,47 @@ const $=id=>document.getElementById(id);
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',3200);}
 function fmt(n){return n>=1000?n.toLocaleString(undefined,{maximumFractionDigits:2}):n.toPrecision(5).replace(/\.?0+$/,'');}
 
+let _dragSym=null;
 function renderWatchlist(){
   const wl=$('watchlist');wl.innerHTML='';
   state.watchlist.forEach(sym=>{
     const el=document.createElement('div');
     el.className='wl-item'+(sym===state.symbol?' on':'');
-    el.innerHTML=`<span class="sym">${sym}</span>
+    el.draggable=true; el.dataset.sym=sym;
+    el.innerHTML=`<span class="grip" title="drag to reorder">⠿</span>
+      <span class="sym">${sym}</span>
       <span class="chg" id="chg-${sym}"></span>
       <span class="dot" id="dot-${sym}"></span>
       <span class="x" title="remove">✕</span>`;
     el.onclick=()=>selectSymbol(sym);
     el.querySelector('.x').onclick=e=>{e.stopPropagation();
       state.watchlist=state.watchlist.filter(s=>s!==sym);saveWl();renderWatchlist();};
+    // drag to reorder
+    el.addEventListener('dragstart',e=>{_dragSym=sym;el.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',sym);}catch(_){}});
+    el.addEventListener('dragend',()=>{_dragSym=null;
+      document.querySelectorAll('.wl-item').forEach(x=>x.classList.remove('dragging','dragover','dragover-bottom'));});
+    el.addEventListener('dragover',e=>{if(!_dragSym)return;e.preventDefault();e.dataTransfer.dropEffect='move';
+      const below=(e.clientY-el.getBoundingClientRect().top)>el.offsetHeight/2;
+      el.classList.toggle('dragover',!below);el.classList.toggle('dragover-bottom',below);});
+    el.addEventListener('dragleave',()=>el.classList.remove('dragover','dragover-bottom'));
+    el.addEventListener('drop',e=>{e.preventDefault();
+      const below=el.classList.contains('dragover-bottom');
+      reorderWatchlist(_dragSym,sym,below);});
     wl.appendChild(el);
   });
   paintWatchlistChanges();
   loadWatchlistChanges();
+}
+function reorderWatchlist(from,toSym,below){
+  if(!from||from===toSym) return;
+  const list=state.watchlist.slice();
+  const fi=list.indexOf(from); if(fi<0) return;
+  list.splice(fi,1);
+  let ti=list.indexOf(toSym); if(ti<0){renderWatchlist();return;}
+  if(below) ti++;
+  list.splice(ti,0,from);
+  state.watchlist=list; saveWl(); renderWatchlist();
 }
 state.dayChange={};
 function paintWatchlistChanges(){
@@ -1402,7 +1533,7 @@ function renderPopular(){
   });
 }
 
-function paintSignal(sig,mtf,conf){
+function paintSignal(sig,mtf,conf,trust){
   $('sigSym').textContent=state.symbol;
   state.lastConf=conf;
   // headline verdict = multi-timeframe blend → it does NOT change with the chart timeframe
@@ -1411,6 +1542,14 @@ function paintSignal(sig,mtf,conf){
   $('scoreNum').textContent=(conf.score>0?'+':'')+conf.score;
   $('tierName').textContent=tier.label;
   [...$('tierBar').children].forEach(s=>s.classList.toggle('act', s.dataset.tier===tier.cls));
+  // confidence / trust (calibrated against the auto-backtest)
+  if(trust){
+    state.lastTrust=trust;
+    const f=$('confFill'); if(f){ f.style.width=trust.pct+'%';
+      f.style.background = trust.pct>=65?'var(--buy)':trust.pct>=40?'#f0b90b':'var(--sell)'; }
+    if($('confPct')) $('confPct').textContent=trust.pct+'%';
+    if($('trustLine')) $('trustLine').innerHTML=trust.text;
+  }
   // reasons from the daily read (stable reference), fall back to current timeframe
   const reasonsSig=(mtf.find(x=>x.tf==='1d')||{}).signal || sig;
   const ul=$('reasons');ul.innerHTML='';
@@ -1459,24 +1598,29 @@ function drawEquity(eq){
 /* ============================================================
    ORCHESTRATION
 ============================================================ */
-let analyzing=false;
+let analyzeToken=0;
 async function analyze(){
-  if(analyzing)return;analyzing=true;$('dataErr').textContent='';
+  const tok=++analyzeToken; $('dataErr').textContent='';   // latest call always wins (no dropped switches)
   try{
     const candles=await fetchCandles(state.symbol,state.market,state.tf,400);
+    if(tok!==analyzeToken) return;                          // a newer symbol/TF took over
     const P=precompute(candles,state.cfg);
     const sig=signalAt(P,candles.length-1,state.cfg);
     if(!sig)throw new Error('Not enough data to compute indicators');
     sig._candles=candles;
     const mtf=await multiTimeframe(state.symbol,state.market,state.cfg);
+    if(tok!==analyzeToken) return;
     const conf=confluence(mtf);
-    paintSignal(sig,mtf,conf);
+    const bt=aggregateBacktest(mtf,state.cfg);             // strategy's track record pooled across TFs
+    const trust=buildTrust(conf,bt,mtf);
+    paintSignal(sig,mtf,conf,trust);
     const i=candles.length-1;
     applyAlerts(state.symbol,{price:sig.price,rsi:P.r[i],score:conf.score,action:conf.action});
   }catch(e){
-    $('dataErr').textContent='⚠ '+e.message+(state.market==='stock'?' — stock data routes through a public CORS proxy; it can be slow or rate-limited. Retry or switch TF.':'');
+    if(tok!==analyzeToken) return;
+    $('dataErr').textContent='⚠ '+e.message+(state.market==='stock'?' — stock data routes through a proxy; it can be briefly slow. Retry or switch TF.':'');
     $('badge').textContent='—';$('badge').className='badge HOLD';
-  }finally{analyzing=false;}
+  }
 }
 
 function selectSymbol(sym){
@@ -1977,7 +2121,7 @@ function setupLangToggle(){
 /* ---- contextual help "?" tooltips ---- */
 const HELP={
   en:{
-    signal:'The overall read on this symbol right now: one score from −100 (strong sell) to +100 (strong buy), built from 8 indicators. Each line below is a reason that pushed the score up (▲) or down (▼).',
+    signal:'The overall read on this symbol right now: one score from −100 (strong sell) to +100 (strong buy), built from 9 indicators (incl. RSI/price divergence) and blended across all timeframes. Each line below is a reason that pushed the score up (▲) or down (▼). The Confidence % tells you how much to trust THIS call: it combines how strong the score is, how much the timeframes agree, and how this exact strategy has actually performed on this symbol in a backtest (profit per trade + win rate). It deliberately reads LOW when the evidence is weak or the setup fights the daily trend.',
     position:'Enter the price you bought at and it builds a risk-managed plan — sell targets, a stop-loss, an add/buy zone, and your live profit/loss — all derived from volatility (ATR) and real support/resistance.',
     mtf:'Runs the same scoring on all five timeframes and blends them (higher timeframes count more). “Agreement” is how many timeframes point the same way — higher agreement means a stronger, more reliable signal.',
     scanner:'Ranks every symbol in your watchlist by its signal score on the current timeframe, so you can spot the strongest setups at a glance. Click any row to open it.',
