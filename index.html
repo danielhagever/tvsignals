@@ -904,7 +904,7 @@ function precompute(candles,cfg){
     eF:ema(close,cfg.emaF), eS:ema(close,cfg.emaS),
     r:rsi(close,cfg.rsiLen), m:macd(close), bb:bollinger(close),
     st:stochastic(candles), adx:adx(candles), atr:atr(candles),
-    ob, obSma:sma(ob,20),
+    ob, obSma:sma(ob,20), vSma:sma(candles.map(x=>x.v),20),
   };
 }
 // Local lows/highs in a series within [i-lb, i] — needs 2 confirming bars on each
@@ -995,7 +995,14 @@ function signalAt(P,i,cfg){
   else if(div==='bear'){score-=15;reasons.push(['neg','Bearish RSI divergence']);}
 
   score=Math.round(Math.max(-100,Math.min(100,score)));
-  const action=score>=cfg.thr?'BUY':score<=-cfg.thr?'SELL':'HOLD';
+  let action=score>=cfg.thr?'BUY':score<=-cfg.thr?'SELL':'HOLD';
+  // Stocks only: require real participation (≥ 20-bar avg volume) to ACT on a signal —
+  // low-volume moves are unreliable. Validated to improve stock expectancy out-of-sample
+  // (crypto trends 24/7 and this hurt it, so cfg.volFilter is set only for stocks).
+  if(cfg.volFilter && action!=='HOLD' && P.vSma && P.vSma[i]!=null && P.candles[i].v < P.vSma[i]){
+    action='HOLD';
+    reasons.push(['neu','Low volume — waiting for stronger participation']);
+  }
   return {action,score,reasons,price:close[i],idx:i,atr:atr[i]??null};
 }
 // 7-tier directional label (display) — splits the HOLD band into Lean Buy / Neutral / Lean Sell
@@ -1614,16 +1621,17 @@ let analyzeToken=0;
 async function analyze(){
   const tok=++analyzeToken; $('dataErr').textContent='';   // latest call always wins (no dropped switches)
   try{
+    const acfg = state.market==='stock' ? {...state.cfg, volFilter:1} : state.cfg;  // volume gate: stocks only
     const candles=await fetchCandles(state.symbol,state.market,state.tf,400);
     if(tok!==analyzeToken) return;                          // a newer symbol/TF took over
-    const P=precompute(candles,state.cfg);
-    const sig=signalAt(P,candles.length-1,state.cfg);
+    const P=precompute(candles,acfg);
+    const sig=signalAt(P,candles.length-1,acfg);
     if(!sig)throw new Error('Not enough data to compute indicators');
     sig._candles=candles;
-    const mtf=await multiTimeframe(state.symbol,state.market,state.cfg);
+    const mtf=await multiTimeframe(state.symbol,state.market,acfg);
     if(tok!==analyzeToken) return;
     const conf=confluence(mtf);
-    const bt=aggregateBacktest(mtf,state.cfg);             // strategy's track record pooled across TFs
+    const bt=aggregateBacktest(mtf,acfg);                 // strategy's track record pooled across TFs
     const trust=buildTrust(conf,bt,mtf);
     paintSignal(sig,mtf,conf,trust);
     const i=candles.length-1;
@@ -1721,9 +1729,10 @@ async function checkAllAlerts(){
   for(const sym of syms){
     const mkt=rules.find(r=>r.sym===sym).market;
     try{
+      const cfg=mkt==='stock'?{...state.cfg,volFilter:1}:state.cfg;
       const c=await fetchCandles(sym,mkt,state.tf,200);
-      const P=precompute(c,state.cfg);
-      const s=signalAt(P,c.length-1,state.cfg);
+      const P=precompute(c,cfg);
+      const s=signalAt(P,c.length-1,cfg);
       if(s)applyAlerts(sym,{price:s.price,rsi:P.r[c.length-1],score:s.score,action:s.action});
     }catch(e){}
   }
@@ -1990,7 +1999,7 @@ $('btBtn').onclick=async()=>{
   $('btBtn').disabled=true;$('btBtn').textContent='Running…';
   try{
     const candles=await fetchCandles(state.symbol,state.market,state.tf,500);
-    const r=backtest(candles,state.cfg);
+    const r=backtest(candles,state.market==='stock'?{...state.cfg,volFilter:1}:state.cfg);
     $('btStats').style.display='grid';
     $('btTrades').textContent=r.trades;
     $('btWin').textContent=(r.winRate*100).toFixed(0)+'%';
