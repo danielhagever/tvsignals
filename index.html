@@ -939,41 +939,49 @@ function signalAt(P,i,cfg){
   const {eF,eS,r,m,bb,close,st,adx,atr,ob,obSma}=P;
   if(eF[i]==null||eS[i]==null||r[i]==null||m[i].hist==null||bb[i]==null) return null;
 
+  // --- Regime (ADX/DMI): is the market TRENDING or RANGING? Adapt how much each signal
+  // type is trusted. The classic mistake is fading a strong trend on an oscillator
+  // ("sell, it's overbought") mid-rally — so oscillators get muted when they fight a
+  // strong trend, and trend signals get muted in choppy ranges where they whipsaw. ---
+  const A=adx[i].adx, trendDir=adx[i].pdi>=adx[i].mdi?1:-1;
+  const strongTrend = A!=null && A>25, ranging = A!=null && A<20;
+  const mrW = d => strongTrend ? (d===trendDir ? 1.0 : 0.25) : ranging ? 1.15 : 1.0; // mean-reversion weight
+  const trW = ranging ? 0.6 : 1.0;                                                     // trend-signal weight
+
   // --- Trend (EMA) ---
-  if(eF[i]>eS[i]){score+=22;reasons.push(['pos',`Uptrend · EMA${cfg.emaF} > EMA${cfg.emaS}`]);}
-  else{score-=22;reasons.push(['neg',`Downtrend · EMA${cfg.emaF} < EMA${cfg.emaS}`]);}
+  if(eF[i]>eS[i]){score+=22*trW;reasons.push(['pos',`Uptrend · EMA${cfg.emaF} > EMA${cfg.emaS}`]);}
+  else{score-=22*trW;reasons.push(['neg',`Downtrend · EMA${cfg.emaF} < EMA${cfg.emaS}`]);}
 
   // --- Trend strength (ADX / DMI) ---
-  if(adx[i].adx!=null){
-    if(adx[i].adx>25){
-      const dir=adx[i].pdi>=adx[i].mdi?1:-1;
-      score+=dir*12;
-      reasons.push([dir>0?'pos':'neg',`Strong trend · ADX ${adx[i].adx.toFixed(0)} (${dir>0?'+DI>−DI':'−DI>+DI'})`]);
-    } else if(adx[i].adx<20){
-      reasons.push(['neu',`Ranging · ADX ${adx[i].adx.toFixed(0)} (weak trend)`]);
+  if(A!=null){
+    if(A>25){
+      score+=trendDir*12;
+      reasons.push([trendDir>0?'pos':'neg',`Strong trend · ADX ${A.toFixed(0)} (${trendDir>0?'+DI>−DI':'−DI>+DI'})`]);
+    } else if(A<20){
+      reasons.push(['neu',`Ranging · ADX ${A.toFixed(0)} (mean-reversion favored)`]);
     }
   }
 
-  // --- RSI ---
-  if(r[i]<30){score+=18;reasons.push(['pos',`RSI oversold (${r[i].toFixed(0)})`]);}
-  else if(r[i]>70){score-=18;reasons.push(['neg',`RSI overbought (${r[i].toFixed(0)})`]);}
+  // --- RSI (mean-reversion, regime-weighted) ---
+  if(r[i]<30){score+=18*mrW(1);reasons.push(['pos',`RSI oversold (${r[i].toFixed(0)})`+(strongTrend&&trendDir<0?' · weak vs downtrend':'')]);}
+  else if(r[i]>70){score-=18*mrW(-1);reasons.push(['neg',`RSI overbought (${r[i].toFixed(0)})`+(strongTrend&&trendDir>0?' · trend can stay hot':'')]);}
   else reasons.push(['neu',`RSI neutral (${r[i].toFixed(0)})`]);
 
-  // --- Stochastic ---
+  // --- Stochastic (mean-reversion, regime-weighted) ---
   if(st[i].k!=null){
-    if(st[i].k<20){score+=10;reasons.push(['pos',`Stochastic oversold (${st[i].k.toFixed(0)})`]);}
-    else if(st[i].k>80){score-=10;reasons.push(['neg',`Stochastic overbought (${st[i].k.toFixed(0)})`]);}
+    if(st[i].k<20){score+=10*mrW(1);reasons.push(['pos',`Stochastic oversold (${st[i].k.toFixed(0)})`]);}
+    else if(st[i].k>80){score-=10*mrW(-1);reasons.push(['neg',`Stochastic overbought (${st[i].k.toFixed(0)})`]);}
   }
 
-  // --- MACD ---
-  if(m[i].hist>0&&m[i-1].hist<=0){score+=18;reasons.push(['pos','MACD bullish cross']);}
-  else if(m[i].hist<0&&m[i-1].hist>=0){score-=18;reasons.push(['neg','MACD bearish cross']);}
-  else if(m[i].hist>0){score+=7;reasons.push(['pos','MACD histogram positive']);}
-  else{score-=7;reasons.push(['neg','MACD histogram negative']);}
+  // --- MACD (momentum/trend, regime-weighted) ---
+  if(m[i].hist>0&&m[i-1].hist<=0){score+=18*trW;reasons.push(['pos','MACD bullish cross']);}
+  else if(m[i].hist<0&&m[i-1].hist>=0){score-=18*trW;reasons.push(['neg','MACD bearish cross']);}
+  else if(m[i].hist>0){score+=7*trW;reasons.push(['pos','MACD histogram positive']);}
+  else{score-=7*trW;reasons.push(['neg','MACD histogram negative']);}
 
-  // --- Bollinger ---
-  if(close[i]<bb[i].lower){score+=13;reasons.push(['pos','Below lower Bollinger band']);}
-  else if(close[i]>bb[i].upper){score-=13;reasons.push(['neg','Above upper Bollinger band']);}
+  // --- Bollinger (mean-reversion, regime-weighted) ---
+  if(close[i]<bb[i].lower){score+=13*mrW(1);reasons.push(['pos','Below lower Bollinger band']);}
+  else if(close[i]>bb[i].upper){score-=13*mrW(-1);reasons.push(['neg','Above upper Bollinger band']);}
 
   // --- OBV volume confirmation ---
   if(obSma[i]!=null){
@@ -986,7 +994,7 @@ function signalAt(P,i,cfg){
   if(div==='bull'){score+=15;reasons.push(['pos','Bullish RSI divergence']);}
   else if(div==='bear'){score-=15;reasons.push(['neg','Bearish RSI divergence']);}
 
-  score=Math.max(-100,Math.min(100,score));
+  score=Math.round(Math.max(-100,Math.min(100,score)));
   const action=score>=cfg.thr?'BUY':score<=-cfg.thr?'SELL':'HOLD';
   return {action,score,reasons,price:close[i],idx:i,atr:atr[i]??null};
 }
@@ -1072,34 +1080,38 @@ function buildTrust(conf, bt, mtf){
 }
 
 /* ============================================================
-   BACKTESTER — long/flat, signal-driven, with stop & target
+   BACKTESTER — long/short, signal-driven. Initial 1.5×ATR/swing stop, then a
+   2×ATR TRAILING stop that ratchets in your favor (let winners run, no fixed
+   target). The 2×ATR trail was A/B-tested vs a fixed 2R target and improved
+   expectancy on BOTH crypto and stocks (wider trails overfit crypto only).
 ============================================================ */
+const TRAIL_ATR=2;
 function backtest(candles,cfg){
   const P=precompute(candles,cfg);
   let cash=10000,pos=null,trades=[],equity=[];
   for(let i=1;i<candles.length;i++){
     const s=signalAt(P,i,cfg);const px=candles[i].c;
     if(!s){equity.push(cash);continue;}
-    const a=P.atr[i];
+    const a=P.atr[i]||px*0.01, hi=candles[i].h, lo=candles[i].l;
     if(!pos&&s.action==='BUY'){            // go long
       const swingLow=Math.min(...candles.slice(Math.max(0,i-10),i+1).map(c=>c.l));
-      const stop=a?Math.max(swingLow,px-1.5*a):swingLow;
-      const risk=Math.max(px-stop,px*0.001);
-      pos={dir:1,entry:px,stop,target:px+risk*2,qty:cash/px};
+      const stop=Math.max(swingLow,px-1.5*a);
+      pos={dir:1,entry:px,stop,risk:Math.max(px-stop,px*0.001),peak:px,qty:cash/px};
     } else if(!pos&&s.action==='SELL'){    // go short (so SELL calls have a track record too)
       const swingHigh=Math.max(...candles.slice(Math.max(0,i-10),i+1).map(c=>c.h));
-      const stop=a?Math.min(swingHigh,px+1.5*a):swingHigh;
-      const risk=Math.max(stop-px,px*0.001);
-      pos={dir:-1,entry:px,stop,target:px-risk*2,qty:cash/px};
+      const stop=Math.min(swingHigh,px+1.5*a);
+      pos={dir:-1,entry:px,stop,risk:Math.max(stop-px,px*0.001),peak:px,qty:cash/px};
     } else if(pos){
-      const exit = pos.dir>0
-        ? (candles[i].l<=pos.stop ? pos.stop : candles[i].h>=pos.target ? pos.target : s.action==='SELL' ? px : null)
-        : (candles[i].h>=pos.stop ? pos.stop : candles[i].l<=pos.target ? pos.target : s.action==='BUY'  ? px : null);
+      const d=pos.dir;
+      pos.peak = d>0 ? Math.max(pos.peak,hi) : Math.min(pos.peak,lo);
+      const trail = d>0 ? pos.peak-TRAIL_ATR*a : pos.peak+TRAIL_ATR*a;   // ratchet the stop, never loosen it
+      pos.stop = d>0 ? Math.max(pos.stop,trail) : Math.min(pos.stop,trail);
+      const exit = d>0 ? (lo<=pos.stop ? pos.stop : s.action==='SELL' ? px : null)
+                       : (hi>=pos.stop ? pos.stop : s.action==='BUY'  ? px : null);
       if(exit!==null){
-        const pnl=(exit-pos.entry)*pos.qty*pos.dir;
-        cash+=pnl;
-        trades.push({ret:(exit-pos.entry)/pos.entry*pos.dir, win:pnl>0,
-                     r:(exit-pos.entry)*pos.dir/Math.abs(pos.entry-pos.stop||1)});
+        cash+=(exit-pos.entry)*pos.qty*d;
+        trades.push({ret:(exit-pos.entry)/pos.entry*d, win:(exit-pos.entry)*d>0,
+                     r:(exit-pos.entry)*d/pos.risk});
         pos=null;
       }
     }
