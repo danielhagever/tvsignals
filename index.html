@@ -904,12 +904,20 @@ function precompute(candles,cfg){
   const rs=resample(candles,4), rc=rs.map(x=>x.c), hf=ema(rc,10), hs=ema(rc,30);
   const hiT=candles.map((_,i)=>{ const j=Math.floor(i/4)-1;
     return (j>=0&&hf[j]!=null&&hs[j]!=null)?(hf[j]>=hs[j]?1:-1):0; });
+  const A=atr(candles);
+  // Volatility percentile: where does this bar's ATR% sit vs the trailing ~100 bars?
+  // (compares only against bars < i → causal). Used by the crypto volatility-spike gate.
+  const ap=candles.map((x,i)=>A[i]?A[i]/x.c:null);
+  const atrRank=candles.map((_,i)=>{ const now=ap[i]; if(now==null) return null;
+    let cnt=0,tot=0;
+    for(let k=Math.max(20,i-100);k<i;k++){ const v=ap[k]; if(v!=null){tot++; if(v<now)cnt++;} }
+    return tot>30 ? cnt/tot : null; });
   return {
     candles,close,
     eF:ema(close,cfg.emaF), eS:ema(close,cfg.emaS),
     r:rsi(close,cfg.rsiLen), m:macd(close), bb:bollinger(close),
-    st:stochastic(candles), adx:adx(candles), atr:atr(candles),
-    ob, obSma:sma(ob,20), vSma:sma(candles.map(x=>x.v),20), hiT,
+    st:stochastic(candles), adx:adx(candles), atr:A,
+    ob, obSma:sma(ob,20), vSma:sma(candles.map(x=>x.v),20), hiT, atrRank,
   };
 }
 // Local lows/highs in a series within [i-lb, i] — needs 2 confirming bars on each
@@ -1017,6 +1025,28 @@ function signalAt(P,i,cfg){
       reasons.push(['neu','Fights the higher-timeframe trend — standing aside']);
     }
   }
+  // Crypto only: skip entries during a volatility SPIKE (ATR% in the top decile of the
+  // trailing ~100 bars) — blown-out candles make oversized-risk entries. The stock
+  // version of this cap failed out-of-sample (it filtered big-volatility winners).
+  if(cfg.volCap && action!=='HOLD' && P.atrRank && P.atrRank[i]!=null && P.atrRank[i]>0.9){
+    action='HOLD';
+    reasons.push(['neu','Volatility spike — waiting for a calmer entry']);
+  }
+  // Crypto only: act only while the signal is FRESH (score crossed the threshold within
+  // the last ~3 bars). Late entries chase a move that already ran; validated crypto-only
+  // (it hurt stocks). Score is gate-independent, so looking back is not recursive.
+  if(cfg.freshGate && action!=='HOLD' && i>4){
+    let fresh=false;
+    const sub={...cfg,freshGate:0};
+    for(let k=Math.max(1,i-4);k<i;k++){
+      const pv=signalAt(P,k,sub);
+      if(!pv || Math.abs(pv.score)<cfg.thr){ fresh=true; break; }
+    }
+    if(!fresh){
+      action='HOLD';
+      reasons.push(['neu','Signal not fresh — the entry window has passed']);
+    }
+  }
   return {action,score,reasons,price:close[i],idx:i,atr:atr[i]??null};
 }
 // 7-tier directional label (display) — splits the HOLD band into Lean Buy / Neutral / Lean Sell
@@ -1114,13 +1144,14 @@ function backtest(candles,cfg){
     const s=signalAt(P,i,cfg);const px=candles[i].c;
     if(!s){equity.push(cash);continue;}
     const a=P.atr[i]||px*0.01, hi=candles[i].h, lo=candles[i].l;
+    const initM=cfg.initStop||1.5;   // stocks use a tighter 1.0×ATR initial stop (validated)
     if(!pos&&s.action==='BUY'){            // go long
       const swingLow=Math.min(...candles.slice(Math.max(0,i-10),i+1).map(c=>c.l));
-      const stop=Math.max(swingLow,px-1.5*a);
+      const stop=Math.max(swingLow,px-initM*a);
       pos={dir:1,entry:px,stop,risk:Math.max(px-stop,px*0.001),peak:px,qty:cash/px};
     } else if(!pos&&s.action==='SELL'){    // go short (so SELL calls have a track record too)
       const swingHigh=Math.max(...candles.slice(Math.max(0,i-10),i+1).map(c=>c.h));
-      const stop=Math.min(swingHigh,px+1.5*a);
+      const stop=Math.min(swingHigh,px+initM*a);
       pos={dir:-1,entry:px,stop,risk:Math.max(stop-px,px*0.001),peak:px,qty:cash/px};
     } else if(pos){
       const d=pos.dir;
@@ -1595,7 +1626,8 @@ function paintSignal(sig,mtf,conf,trust){
   // trade plan (ATR-based stop, 2R target)
   const c=sig._candles;const i=sig.idx;
   const swingLow=Math.min(...c.slice(Math.max(0,i-10),i+1).map(x=>x.l));
-  const stopPrice=sig.atr?Math.max(swingLow,sig.price-1.5*sig.atr):swingLow;
+  const stopM=state.market==='stock'?1.0:1.5;   // match the validated market-tuned initial stop
+  const stopPrice=sig.atr?Math.max(swingLow,sig.price-stopM*sig.atr):swingLow;
   const risk=sig.price-stopPrice;
   $('entry').textContent=fmt(sig.price);
   $('stop').textContent=fmt(stopPrice);
@@ -1631,11 +1663,20 @@ function drawEquity(eq){
 /* ============================================================
    ORCHESTRATION
 ============================================================ */
+// Market-tuned engine config. Every rule here was A/B-validated on tune + FRESH
+// held-out baskets for its own market (see git history for the numbers):
+//   stocks → volume-participation gate + tighter 1.0×ATR initial stop
+//   crypto → volatility-spike entry cap + signal-freshness gate
+// (the higher-TF alignment gate and 2×ATR trailing exit apply to both markets)
+function cfgFor(mkt){
+  return mkt==='stock' ? {...state.cfg, volFilter:1, initStop:1.0}
+                       : {...state.cfg, volCap:1, freshGate:1};
+}
 let analyzeToken=0;
 async function analyze(){
   const tok=++analyzeToken; $('dataErr').textContent='';   // latest call always wins (no dropped switches)
   try{
-    const acfg = state.market==='stock' ? {...state.cfg, volFilter:1} : state.cfg;  // volume gate: stocks only
+    const acfg = cfgFor(state.market);
     const candles=await fetchCandles(state.symbol,state.market,state.tf,400);
     if(tok!==analyzeToken) return;                          // a newer symbol/TF took over
     const P=precompute(candles,acfg);
@@ -1743,7 +1784,7 @@ async function checkAllAlerts(){
   for(const sym of syms){
     const mkt=rules.find(r=>r.sym===sym).market;
     try{
-      const cfg=mkt==='stock'?{...state.cfg,volFilter:1}:state.cfg;
+      const cfg=cfgFor(mkt);
       const c=await fetchCandles(sym,mkt,state.tf,200);
       const P=precompute(c,cfg);
       const s=signalAt(P,c.length-1,cfg);
@@ -1769,8 +1810,10 @@ function saveEntries(){localStorage.setItem('tvs_entries',JSON.stringify(state.e
 function loadEntryInput(){$('entryPrice').value=state.entries[state.symbol]??'';}
 function positionPlan(entry,price,atr,candles){
   const levels=pivotLevels(candles);
-  // stop: 1.5×ATR below entry, snapped just under a nearby support
-  let stop=entry-1.5*atr;
+  // stop: market-tuned ATR multiple below entry (stocks 1.0×, crypto 1.5× — validated),
+  // snapped just under a nearby support
+  const im=state.market==='stock'?1.0:1.5;
+  let stop=entry-im*atr;
   const supNear=levels.filter(l=>l.price<entry&&l.price>stop-atr).sort((a,b)=>b.price-a.price)[0];
   if(supNear) stop=Math.min(stop,supNear.price-0.25*atr);
   stop=Math.min(stop,entry-0.5*atr);            // keep it meaningfully below entry
@@ -1818,7 +1861,7 @@ function renderPosition(){
   $('posStop').innerHTML=cell(plan.stop,(plan.stop-entry)/entry);
   $('posRR').textContent='1 : '+plan.rr.toFixed(1);
   const cscore=state.lastConf?state.lastConf.score:sig.score;
-  $('posNote').textContent=`Stop = 1.5×ATR below entry, snapped under support; targets at 1.5R / 2.5R into resistance. Overall signal: ${signalTier(cscore,state.cfg.thr).label} (${cscore>0?'+':''}${cscore}).`;
+  $('posNote').textContent=`Stop = ${state.market==='stock'?'1.0':'1.5'}×ATR below entry, snapped under support; targets at 1.5R / 2.5R into resistance. Overall signal: ${signalTier(cscore,state.cfg.thr).label} (${cscore>0?'+':''}${cscore}).`;
   state.entries[state.symbol]=entry; saveEntries();
 }
 
@@ -1826,9 +1869,10 @@ function renderPosition(){
 async function runScan(){
   const tf=state.tf,syms=state.watchlist.slice(0,16);
   const res=await Promise.allSettled(syms.map(async sym=>{
+    const mcfg=cfgFor(marketOf(sym));
     const c=await fetchCandles(sym,marketOf(sym),tf,200);
-    const P=precompute(c,state.cfg);
-    const s=signalAt(P,c.length-1,state.cfg);
+    const P=precompute(c,mcfg);
+    const s=signalAt(P,c.length-1,mcfg);
     if(!s)throw new Error('no data');
     return {sym,score:s.score,action:s.action};
   }));
@@ -2013,7 +2057,7 @@ $('btBtn').onclick=async()=>{
   $('btBtn').disabled=true;$('btBtn').textContent='Running…';
   try{
     const candles=await fetchCandles(state.symbol,state.market,state.tf,500);
-    const r=backtest(candles,state.market==='stock'?{...state.cfg,volFilter:1}:state.cfg);
+    const r=backtest(candles,cfgFor(state.market));
     $('btStats').style.display='grid';
     $('btTrades').textContent=r.trades;
     $('btWin').textContent=(r.winRate*100).toFixed(0)+'%';
