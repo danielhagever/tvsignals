@@ -431,6 +431,25 @@
     </div>
 
     <div class="card">
+      <h3><span data-i18n="card_size">Position size</span><span class="help-dot" data-help="size">?</span></h3>
+      <div class="pos-entry">
+        <label data-i18n="sz_acct">Account</label>
+        <input id="acctSize" type="number" inputmode="decimal" step="any" min="0" placeholder="e.g. 10000" />
+      </div>
+      <div class="pos-entry" style="margin-top:6px">
+        <label data-i18n="sz_risk">Risk / trade %</label>
+        <input id="riskPct" type="number" inputmode="decimal" step="0.25" min="0.1" max="10" placeholder="1" />
+      </div>
+      <div id="sizeBody" style="display:none;margin-top:8px">
+        <div class="kv"><span data-i18n="sz_units">Buy (units)</span><b id="sizeUnits">—</b></div>
+        <div class="kv"><span data-i18n="sz_cost">Position cost</span><b id="sizeCost">—</b></div>
+        <div class="kv"><span data-i18n="sz_atrisk">Loss if stopped</span><b id="sizeRisk">—</b></div>
+        <div class="hint" id="sizeNote" style="padding:6px 2px 0"></div>
+      </div>
+      <div class="hint" id="sizeHint" style="padding:4px 2px 0" data-i18n="sz_hint">Enter your account size to size trades so a stop-out costs only your chosen risk %.</div>
+    </div>
+
+    <div class="card">
       <h3><span data-i18n="card_backtest">Backtest</span><span class="help-dot" data-help="backtest">?</span></h3>
       <button class="btn" id="btBtn" data-i18n="bt_btn">Run backtest on this TF</button>
       <div class="row2" id="btStats" style="margin-top:12px;display:none">
@@ -645,51 +664,64 @@ const YF_TF = {
 };
 // Public CORS proxies tried in order (no key, best-effort). Each entry builds the
 // proxied URL and says how to unwrap the response.
+// Primary stock-data path: our own Cloudflare Worker (Yahoo-locked, CORS, NO rate
+// limits) — safe to hit in PARALLEL, so multi-TF loads are fast.
+const WORKER_PROXY = u=>`https://tvsignals-proxy.meshulam791.workers.dev/?url=${encodeURIComponent(u)}`;
+// Fallbacks: public proxies — flaky AND they rate-limit bursts, so if the Worker is
+// ever unreachable these run through a one-at-a-time queue.
 const PROXIES = [
-  // Primary: our own Cloudflare Worker (Yahoo-locked, CORS, no rate limits).
-  u=>({u:`https://tvsignals-proxy.meshulam791.workers.dev/?url=${encodeURIComponent(u)}`}),
-  // Fallbacks: public proxies (flaky, used only if the Worker is unreachable).
   u=>({u:`https://corsproxy.io/?url=${encodeURIComponent(u)}`}),
   u=>({u:`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`}),
   u=>({u:`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, wrap:true}),
 ];
-// fetch with a hard timeout so one hung proxy can't stall the whole queue
+// fetch with a hard timeout so one hung proxy can't stall anything
 function _fetchT(u,ms=12000){
   const c=new AbortController(); const t=setTimeout(()=>c.abort(),ms);
   return fetch(u,{cache:'no-store',signal:c.signal}).finally(()=>clearTimeout(t));
 }
-// Stock data goes through free proxies that RATE-LIMIT bursts. The app asks for
-// ~5 timeframes + a ticker at once (confluence), which instantly trips a 403.
-// So: (1) run proxied requests ONE AT A TIME (global queue), and (2) micro-cache
-// each result so the multi-TF pass + live refresh reuse instead of re-hammering.
-const _pxCache=new Map();          // key -> {t, data}
-let _pxChain=Promise.resolve();    // concurrency = 1
+const _pxCache=new Map();          // key -> {t, data}   micro-cache (dedupes refreshes)
+const _pxInflight=new Map();       // key -> Promise     dedupes concurrent identical calls
+let _pxChain=Promise.resolve();    // fallback-proxy queue, concurrency = 1
 const PX_TTL=25000;
 function _pxRun(fn){ const r=_pxChain.then(fn,fn); _pxChain=r.catch(()=>{}); return r; }
 async function proxiedJSON(url){
   const key=url.replace(/[?&]_=\d+/,'');                 // ignore cache-buster in the key
   const hit=_pxCache.get(key);
   if(hit && Date.now()-hit.t<PX_TTL) return hit.data;
-  return _pxRun(async()=>{
-    const again=_pxCache.get(key);                       // another queued call may have just filled it
-    if(again && Date.now()-again.t<PX_TTL) return again.data;
-    let lastErr;
-    for(let attempt=0; attempt<2; attempt++){
-      for(let i=0;i<PROXIES.length;i++){
-        const spec=PROXIES[i](url);
-        try{
-          const r=await _fetchT(spec.u);
-          if(!r.ok){ lastErr=new Error('HTTP '+r.status); continue; }
-          let data=await r.json();
-          if(spec.wrap) data = typeof data.contents==='string' ? JSON.parse(data.contents) : data.contents;
-          if(data){ _pxCache.set(key,{t:Date.now(),data}); return data; }
-          lastErr=new Error('empty');
-        }catch(e){ lastErr=e; }
-      }
-      if(attempt===0) await new Promise(r=>setTimeout(r,500));   // brief backoff, then one more pass
+  if(_pxInflight.has(key)) return _pxInflight.get(key);
+  const p=(async()=>{
+    // 1) Worker, in parallel (2 quick tries — it's our own infra)
+    for(let t=0;t<2;t++){
+      try{
+        const r=await _fetchT(WORKER_PROXY(url));
+        if(r.ok){ const data=await r.json();
+          if(data){ _pxCache.set(key,{t:Date.now(),data}); return data; } }
+      }catch(e){}
     }
-    throw lastErr||new Error('All proxies failed');
-  });
+    // 2) public fallbacks, serialized to avoid tripping their rate limits
+    return _pxRun(async()=>{
+      const again=_pxCache.get(key);
+      if(again && Date.now()-again.t<PX_TTL) return again.data;
+      let lastErr;
+      for(let attempt=0; attempt<2; attempt++){
+        for(let i=0;i<PROXIES.length;i++){
+          const spec=PROXIES[i](url);
+          try{
+            const r=await _fetchT(spec.u);
+            if(!r.ok){ lastErr=new Error('HTTP '+r.status); continue; }
+            let data=await r.json();
+            if(spec.wrap) data = typeof data.contents==='string' ? JSON.parse(data.contents) : data.contents;
+            if(data){ _pxCache.set(key,{t:Date.now(),data}); return data; }
+            lastErr=new Error('empty');
+          }catch(e){ lastErr=e; }
+        }
+        if(attempt===0) await new Promise(r=>setTimeout(r,500));
+      }
+      throw lastErr||new Error('All proxies failed');
+    });
+  })().finally(()=>_pxInflight.delete(key));
+  _pxInflight.set(key,p);
+  return p;
 }
 function resample(c,n){
   const out=[];
@@ -1422,13 +1454,35 @@ function detectPatterns(candles){
   }
   return found.filter(f=>f.conf>=72).sort((a,b)=>b.conf-a.conf).slice(0,2);   // only high-confidence patterns
 }
+let _warmTried=false;
 async function loadSignalChart(fit=true){
-  const el=$('sig_chart');
   if(typeof LightweightCharts==='undefined'){$('sigBanner').textContent='Chart library failed to load';return;}
+  const intraday=['5m','15m','1h'].includes(state.tf);
+  const usePre = state.market==='stock' && intraday;   // extended hours only for stock intraday
+  // Warm start: on the very first load, paint the cached candles from the last session
+  // instantly, then let the fresh fetch below replace them.
+  if(!_warmTried){
+    _warmTried=true;
+    try{
+      const w=JSON.parse(localStorage.getItem('tvs_warm')||'null');
+      if(w && w.sym===state.symbol && w.tf===state.tf && Array.isArray(w.candles) && w.candles.length>50){
+        renderSigChart(w.candles,true,false);
+        $('sigBanner').innerHTML+=' &nbsp;·&nbsp; <span style="color:var(--muted)">cached — refreshing…</span>';
+      }
+    }catch(e){}
+  }
   try{
-    const intraday=['5m','15m','1h'].includes(state.tf);
-    const usePre = state.market==='stock' && intraday;   // extended hours only for stock intraday
     const candles=await fetchCandles(state.symbol,state.market,state.tf,300, usePre);
+    renderSigChart(candles,fit,usePre);
+    try{ localStorage.setItem('tvs_warm',JSON.stringify(
+      {sym:state.symbol,tf:state.tf,t:Date.now(),candles:candles.slice(-300)})); }catch(e){}
+  }catch(e){
+    $('sigBanner').textContent='⚠ '+e.message;
+  }
+}
+function renderSigChart(candles,fit,usePre){
+  const el=$('sig_chart');
+  {
     const P=precompute(candles,state.cfg);
     if(!sigChart){
       sigChart=LightweightCharts.createChart(el,{
@@ -1467,11 +1521,9 @@ async function loadSignalChart(fit=true){
     $('sigBanner').innerHTML=last
       ? `Latest trigger: <b style="color:${last.text==='BUY'?'var(--buy)':'var(--sell)'}">${last.text}</b> · ${markers.length} signals on ${state.tf}`
       : `No buy/sell triggers in this window · try another timeframe`;
-    if(state.market==='stock' && !intraday)
+    if(state.market==='stock' && !['5m','15m','1h'].includes(state.tf))
       $('sigBanner').innerHTML += ` &nbsp;·&nbsp; <span style="color:var(--muted)">pre/after-market shows on 5m · 15m · 1h</span>`;
     $('sigBanner').innerHTML += ` &nbsp;·&nbsp; <span style="color:var(--muted)">⟳ ${new Date().toLocaleTimeString()}</span>`;
-  }catch(e){
-    $('sigBanner').textContent='⚠ '+e.message;
   }
 }
 function showView(v){
@@ -1634,6 +1686,8 @@ function paintSignal(sig,mtf,conf,trust){
   $('target').textContent=fmt(sig.price+risk*2);
   $('rr').textContent='1 : 2.0';
   $('atrVal').textContent=sig.atr?fmt(sig.atr)+'  ('+(sig.atr/sig.price*100).toFixed(2)+'%)':'—';
+  state.lastPlan={entry:sig.price,stop:stopPrice};
+  renderPositionSize();
   // MTF
   const m=$('mtf');m.innerHTML='';
   mtf.forEach(({tf,signal})=>{
@@ -1838,6 +1892,30 @@ function positionVerdict(plan,price,entry,sig){
   if(up)
     return ['neu',`Holding · up ${(plan.pl*100).toFixed(1)}% · next sell ${fmt(plan.t1)}`];
   return ['neu',`Holding · down ${Math.abs(plan.pl*100).toFixed(1)}% · stop ${fmt(plan.stop)} · add near ${fmt(plan.addZone)}`];
+}
+/* ---- position sizing: units to buy so a stop-out costs exactly the chosen risk % ---- */
+function renderPositionSize(){
+  const acct=parseFloat($('acctSize').value), pct=parseFloat($('riskPct').value)||1;
+  const plan=state.lastPlan;
+  if(!acct||acct<=0||!plan||!(plan.entry>plan.stop)){
+    $('sizeBody').style.display='none';$('sizeHint').style.display='block';return;
+  }
+  $('sizeBody').style.display='block';$('sizeHint').style.display='none';
+  const riskCash=acct*pct/100;
+  const perUnit=plan.entry-plan.stop;
+  let units=riskCash/perUnit;
+  let cost=units*plan.entry, capped=false;
+  if(cost>acct){ units=acct/plan.entry; cost=acct; capped=true; }   // no leverage
+  const uStr = state.market==='stock'
+    ? (units>=1 ? Math.floor(units)+' shares' : units.toFixed(2)+' shares')
+    : units.toPrecision(4).replace(/\.?0+$/,'')+' units';
+  $('sizeUnits').textContent=uStr;
+  $('sizeCost').textContent=fmt(cost)+'  ('+(cost/acct*100).toFixed(0)+'% of account)';
+  const shownUnits = state.market==='stock'&&units>=1 ? Math.floor(units) : units;
+  $('sizeRisk').textContent=fmt(shownUnits*perUnit)+'  ('+(shownUnits*perUnit/acct*100).toFixed(2)+'%)';
+  $('sizeNote').textContent = capped
+    ? '⚠ Full account can\'t reach your risk budget — position capped at 100% (no leverage).'
+    : `Sized off the trade plan: entry ${fmt(plan.entry)}, stop ${fmt(plan.stop)}.`;
 }
 function renderPosition(){
   const sig=state.lastSig; if(!sig) return;
@@ -2073,6 +2151,11 @@ $('entryPrice').addEventListener('input',()=>{
   if(!v||v<=0){delete state.entries[state.symbol];saveEntries();$('posBody').style.display='none';$('posHint').style.display='block';}
   else renderPosition();
 });
+// position sizing inputs (persisted)
+$('acctSize').value=localStorage.getItem('tvs_acct')||'';
+$('riskPct').value=localStorage.getItem('tvs_riskpct')||'1';
+$('acctSize').addEventListener('input',()=>{ localStorage.setItem('tvs_acct',$('acctSize').value); renderPositionSize(); });
+$('riskPct').addEventListener('input',()=>{ localStorage.setItem('tvs_riskpct',$('riskPct').value); renderPositionSize(); });
 $('faqBtn').onclick=()=>$('faqModal').classList.add('open');
 $('faqClose').onclick=()=>$('faqModal').classList.remove('open');
 $('faqModal').addEventListener('click',e=>{ if(e.target===$('faqModal')) $('faqModal').classList.remove('open'); });
@@ -2123,6 +2206,8 @@ const I18N={
     card_mtf:'Multi-timeframe confluence', mtf_agree:'Agreement',
     card_scanner:'Scanner · rank watchlist', scan_btn:'⚡ Scan watchlist on this TF',
     card_trade:'Trade plan', tp_entry:'Entry (last)', tp_stop:'Stop (swing)', tp_target:'Target', tp_rr:'Risk / reward', tp_atr:'Volatility (ATR)',
+    card_size:'Position size', sz_acct:'Account', sz_risk:'Risk / trade %', sz_units:'Buy (units)', sz_cost:'Position cost', sz_atrisk:'Loss if stopped',
+    sz_hint:'Enter your account size to size trades so a stop-out costs only your chosen risk %.',
     card_backtest:'Backtest', bt_btn:'Run backtest on this TF',
     card_alerts:'Alerts', alert_enable:'🔔 Enable alerts', alert_disable:'🔕 Disable alerts',
     card_settings:'⚙ Analysis settings', fineprint:'⚠ Not financial advice · Terms',
@@ -2145,6 +2230,8 @@ const I18N={
     card_mtf:'התכנסות רב-טווחית', mtf_agree:'הסכמה',
     card_scanner:'סורק · דירוג רשימת המעקב', scan_btn:'⚡ סרוק את רשימת המעקב',
     card_trade:'תוכנית מסחר', tp_entry:'כניסה (אחרון)', tp_stop:'סטופ (שפל)', tp_target:'יעד', tp_rr:'סיכון / סיכוי', tp_atr:'תנודתיות (ATR)',
+    card_size:'גודל פוזיציה', sz_acct:'תיק', sz_risk:'סיכון לעסקה %', sz_units:'לקנות (יחידות)', sz_cost:'עלות פוזיציה', sz_atrisk:'הפסד בסטופ',
+    sz_hint:'הזן את גודל התיק כדי לחשב כמה לקנות כך שסטופ יעלה רק את אחוז הסיכון שבחרת.',
     card_backtest:'בדיקה לאחור', bt_btn:'הרץ בדיקה לאחור',
     card_alerts:'התראות', alert_enable:'🔔 הפעל התראות', alert_disable:'🔕 כבה התראות',
     card_settings:'⚙ הגדרות ניתוח', fineprint:'⚠ אינו ייעוץ פיננסי · תנאים',
@@ -2202,6 +2289,7 @@ const HELP={
   en:{
     signal:'The overall read on this symbol right now: one score from −100 (strong sell) to +100 (strong buy), built from 9 indicators (incl. RSI/price divergence) and blended across all timeframes. Each line below is a reason that pushed the score up (▲) or down (▼). The Confidence % tells you how much to trust THIS call: it combines how strong the score is, how much the timeframes agree, and how this exact strategy has actually performed on this symbol in a backtest (profit per trade + win rate). It deliberately reads LOW when the evidence is weak or the setup fights the daily trend.',
     position:'Enter the price you bought at and it builds a risk-managed plan — sell targets, a stop-loss, an add/buy zone, and your live profit/loss — all derived from volatility (ATR) and real support/resistance.',
+    size:'How many shares/coins to buy so that if the stop-loss hits, you lose only your chosen % of the account (e.g. 1%). This is the single most important risk-control habit in trading: the signal picks the trade, position sizing decides how much it can hurt. Computed from the Trade plan\'s entry and stop; capped at 100% of the account (no leverage).',
     mtf:'Runs the same scoring on all five timeframes and blends them (higher timeframes count more). “Agreement” is how many timeframes point the same way — higher agreement means a stronger, more reliable signal.',
     scanner:'Ranks every symbol in your watchlist by its signal score on the current timeframe, so you can spot the strongest setups at a glance. Click any row to open it.',
     trade:'A ready-to-use plan if you bought right now: entry at the last price, an ATR-based stop-loss, a 2× risk target, and the resulting risk-to-reward ratio.',
@@ -2212,6 +2300,7 @@ const HELP={
   he:{
     signal:'הקריאה הכוללת על הסימול כרגע: ציון אחד מ‑100− (מכירה חזקה) עד 100+ (קנייה חזקה), המורכב מ‑8 אינדיקטורים. כל שורה למטה היא סיבה שדחפה את הציון מעלה (▲) או מטה (▼).',
     position:'הזן/י את מחיר הקנייה שלך והמערכת בונה תוכנית מנוהלת‑סיכון — יעדי מכירה, סטופ‑לוס, אזור קנייה/הוספה, והרווח/הפסד החי שלך — הכול מתוך תנודתיות (ATR) ותמיכה/התנגדות אמיתית.',
+    size:'כמה מניות/מטבעות לקנות כך שאם הסטופ‑לוס יופעל, תפסיד/י רק את אחוז הסיכון שבחרת מהתיק (למשל 1%). זהו הרגל ניהול הסיכון החשוב ביותר במסחר: האיתות בוחר את העסקה, גודל הפוזיציה קובע כמה היא יכולה לכאוב. מחושב מהכניסה והסטופ של תוכנית המסחר; מוגבל ל‑100% מהתיק (ללא מינוף).',
     mtf:'מריץ את אותו ניקוד על כל חמשת טווחי הזמן ומשקלל אותם (טווחים גבוהים שוקלים יותר). "הסכמה" היא כמה טווחים מצביעים לאותו כיוון — הסכמה גבוהה = איתות חזק ואמין יותר.',
     scanner:'מדרג כל סימול ברשימת המעקב לפי ציון האיתות בטווח הנוכחי, כדי לזהות את ההזדמנויות החזקות במבט חטוף. לחיצה על שורה פותחת אותה.',
     trade:'תוכנית מוכנה לשימוש אילו היית קונה כעת: כניסה במחיר האחרון, סטופ‑לוס מבוסס ATR, יעד של פי 2 מהסיכון, ויחס הסיכון/סיכוי הנובע מכך.',
