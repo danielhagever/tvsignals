@@ -899,12 +899,17 @@ function obv(c){
 function precompute(candles,cfg){
   const close=candles.map(x=>x.c);
   const ob=obv(candles);
+  // Higher-timeframe trend: resample ×4 (e.g. 1h→4h) and read EMA10 vs EMA30 on the
+  // last COMPLETED higher-TF bar only (j = floor(i/4)−1), so it's causal/backtest-safe.
+  const rs=resample(candles,4), rc=rs.map(x=>x.c), hf=ema(rc,10), hs=ema(rc,30);
+  const hiT=candles.map((_,i)=>{ const j=Math.floor(i/4)-1;
+    return (j>=0&&hf[j]!=null&&hs[j]!=null)?(hf[j]>=hs[j]?1:-1):0; });
   return {
     candles,close,
     eF:ema(close,cfg.emaF), eS:ema(close,cfg.emaS),
     r:rsi(close,cfg.rsiLen), m:macd(close), bb:bollinger(close),
     st:stochastic(candles), adx:adx(candles), atr:atr(candles),
-    ob, obSma:sma(ob,20), vSma:sma(candles.map(x=>x.v),20),
+    ob, obSma:sma(ob,20), vSma:sma(candles.map(x=>x.v),20), hiT,
   };
 }
 // Local lows/highs in a series within [i-lb, i] — needs 2 confirming bars on each
@@ -1002,6 +1007,15 @@ function signalAt(P,i,cfg){
   if(cfg.volFilter && action!=='HOLD' && P.vSma && P.vSma[i]!=null && P.candles[i].v < P.vSma[i]){
     action='HOLD';
     reasons.push(['neu','Low volume — waiting for stronger participation']);
+  }
+  // Both markets: don't ACT against the higher timeframe's trend (this TF resampled ×4).
+  // Validated on tune + fresh held-out baskets: improved crypto AND stocks, never hurt.
+  if(action!=='HOLD' && P.hiT){
+    const t=P.hiT[i];
+    if(t!==0 && ((action==='BUY'&&t<0)||(action==='SELL'&&t>0))){
+      action='HOLD';
+      reasons.push(['neu','Fights the higher-timeframe trend — standing aside']);
+    }
   }
   return {action,score,reasons,price:close[i],idx:i,atr:atr[i]??null};
 }
